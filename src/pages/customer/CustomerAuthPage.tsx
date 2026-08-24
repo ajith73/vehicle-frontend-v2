@@ -1,50 +1,78 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, ArrowLeft, Loader2, Key, Eye, EyeOff, Search, Phone } from 'lucide-react';
-import { FaGoogle } from 'react-icons/fa';
+import { Mail, Lock, ArrowRight, ArrowLeft, Loader2, Key, Eye, EyeOff, Phone, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../../api/apiClient';
-import { useUser, useAuth, SignInButton, SignUpButton } from '@clerk/clerk-react';
+import type { Mechanic } from '../../types';
 
 type AuthView = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD' | 'RESET_PASSWORD';
 type RegisterStep = 'INITIAL' | 'OTP_SENT' | 'OTP_VERIFIED';
 
-export default function CustomerAuthPage() {
+type CustomerAuthPageProps = {
+  portalOverride?: 'CUSTOMER' | 'PARTNER';
+};
+
+export default function CustomerAuthPage({ portalOverride }: CustomerAuthPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const portal = location.pathname.includes('/partner/login') ? 'PARTNER' : 'CUSTOMER';
+  const portal = portalOverride || (location.pathname.includes('/partner/login') ? 'PARTNER' : 'CUSTOMER');
   
   // Read action query param for initial view state
   const params = new URLSearchParams(location.search);
   const actionParam = params.get('action');
+  const resetEmailParam = params.get('email') || '';
+  const resetTokenParam = params.get('token') || '';
   
-  const [view, setView] = useState<AuthView>(actionParam === 'register' ? 'REGISTER' : 'LOGIN');
+  const [view, setView] = useState<AuthView>(
+    actionParam === 'register' ? 'REGISTER' : actionParam === 'reset' ? 'RESET_PASSWORD' : 'LOGIN'
+  );
   const [loading, setLoading] = useState(false);
   const isPartnerLogin = portal === 'PARTNER';
-  
-  // Clerk Hooks
-  const { user, isLoaded: isUserLoaded } = useUser();
-  const { signOut } = useAuth();
 
   // Registration States
   const [registerStep, setRegisterStep] = useState<RegisterStep>('INITIAL');
   const [mobile, setMobile] = useState('');
-  const [mechanicQuery, setMechanicQuery] = useState('');
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [partnerBusinessQuery, setPartnerBusinessQuery] = useState('');
+  const [partnerBusinessResults, setPartnerBusinessResults] = useState<Mechanic[]>([]);
+  const [partnerBusinessLoading, setPartnerBusinessLoading] = useState(false);
+  const [selectedPartnerBusiness, setSelectedPartnerBusiness] = useState<Mechanic | null>(null);
+  const [resetToken, setResetToken] = useState(resetTokenParam);
   const [otpResendSeconds, setOtpResendSeconds] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
-  const isCustomerLogin = !isPartnerLogin;
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedMobile = mobile.replace(/\D/g, '').slice(0, 10);
   const otp = otpDigits.join('');
+  const loginPath = isPartnerLogin ? '/partner/login' : '/customer/login';
+  const authTitle = isPartnerLogin ? 'RoadResQ Partner' : 'RoadResQ';
+  const authSubtitle = isPartnerLogin ? 'Partner Portal' : "Your Vehicle's Best Friend";
+  const registerTitle = isPartnerLogin ? 'Create Partner Account' : 'Create Account';
+  const loginButtonLabel = isPartnerLogin ? 'Partner Login' : 'Login';
+  const registerButtonLabel = isPartnerLogin ? 'Create Partner Account' : 'Register';
+  const resetSuccessRedirect = isPartnerLogin ? '/partner/login' : '/customer/login';
+  const isApprovedPartnerProfile = (profile: any) => {
+    const pendingVerificationStatus = String(profile?.pendingVerification?.status || '').toLowerCase();
+    return (
+      profile?.status === 'Approved' &&
+      Number(profile?.verificationLevel || 0) >= 1 &&
+      pendingVerificationStatus !== 'pending' &&
+      pendingVerificationStatus !== 'rejected'
+    );
+  };
 
   const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
   const isValidIndianMobile = (value: string) => /^\d{10}$/.test(value);
+  const isStrongPartnerPassword = (value: string) =>
+    value.length >= 6 &&
+    /[A-Z]/.test(value) &&
+    /[a-z]/.test(value) &&
+    /\d/.test(value) &&
+    /[^A-Za-z0-9]/.test(value);
   const inputClass = (field: string, extra = '') =>
     `w-full bg-background border rounded-xl text-sm font-medium focus:outline-none focus:ring-1 transition-all ${
       fieldErrors[field]
@@ -66,73 +94,6 @@ export default function CustomerAuthPage() {
     setFieldErrors({});
   };
 
-  // Handle Clerk successful auth interception
-  useEffect(() => {
-    let isMounted = true;
-    
-    const handleGoogleLogin = async (verifiedEmail: string) => {
-      try {
-        setLoading(true);
-        const role = isPartnerLogin ? 'Mechanic' : 'Customer';
-        
-        const res = await apiClient<any>('/auth/google', {
-          method: 'POST',
-          data: { email: verifiedEmail, role, action: 'login', portal }
-        });
-        
-        if (isMounted) {
-          storeSession(res);
-          toast.success(`Welcome back!`);
-          
-          await signOut();
-          
-          if (res.role === 'Mechanic' || res.role === 'Partner') {
-            navigate('/partner');
-          } else {
-            navigate('/customer');
-          }
-        }
-      } catch (err: any) {
-        if (isMounted) {
-          await signOut();
-          toast.error(err.message || 'Google Login failed');
-          if (err.message?.includes('Please register')) {
-            setView('REGISTER');
-            setRegisterStep('INITIAL');
-            navigate(isPartnerLogin ? '?action=register' : '?action=register', { replace: true });
-          }
-        }
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    if (isUserLoaded && user) {
-      if (isCustomerLogin) {
-        signOut();
-        return;
-      }
-
-      const verifiedEmail = user.primaryEmailAddress?.emailAddress;
-      if (verifiedEmail && !loading) {
-        if (actionParam === 'register' || view === 'REGISTER') {
-          // Registration Flow: Use Google only to verify email, then proceed to password setup
-          toast.success(`Email verified automatically via Google`);
-          setEmail(verifiedEmail);
-          setRegisterStep('OTP_VERIFIED');
-          signOut();
-        } else {
-          // Login Flow: Attempt to log in with backend
-          handleGoogleLogin(verifiedEmail);
-        }
-      }
-    }
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [isUserLoaded, user, isPartnerLogin, isCustomerLogin, navigate, signOut, actionParam, view]);
-
   useEffect(() => {
     if (otpResendSeconds <= 0) return;
     const timer = window.setTimeout(() => {
@@ -140,6 +101,43 @@ export default function CustomerAuthPage() {
     }, 1000);
     return () => window.clearTimeout(timer);
   }, [otpResendSeconds]);
+
+  useEffect(() => {
+    setView(actionParam === 'register' ? 'REGISTER' : actionParam === 'reset' ? 'RESET_PASSWORD' : 'LOGIN');
+    if (actionParam === 'reset') {
+      setEmail(resetEmailParam);
+      setResetToken(resetTokenParam);
+    }
+  }, [actionParam, resetEmailParam, resetTokenParam]);
+
+  useEffect(() => {
+    if (!isPartnerLogin || registerStep !== 'INITIAL') {
+      setPartnerBusinessResults([]);
+      setPartnerBusinessLoading(false);
+      return;
+    }
+
+    if (partnerBusinessQuery.trim().length < 2) {
+      setPartnerBusinessResults([]);
+      setPartnerBusinessLoading(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setPartnerBusinessLoading(true);
+        const params = new URLSearchParams({ search: partnerBusinessQuery.trim() });
+        const results = await apiClient<Mechanic[]>(`/public/mechanics?${params.toString()}`);
+        setPartnerBusinessResults((results || []).slice(0, 6));
+      } catch {
+        setPartnerBusinessResults([]);
+      } finally {
+        setPartnerBusinessLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isPartnerLogin, partnerBusinessQuery, registerStep]);
 
   // General States
   const [showPassword, setShowPassword] = useState(false);
@@ -158,8 +156,6 @@ export default function CustomerAuthPage() {
     }
   };
   
-  // Removed manual OAuth handlers in favor of Clerk modal buttons
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const nextErrors: Record<string, string> = {};
@@ -182,9 +178,21 @@ export default function CustomerAuthPage() {
       toast.success('Logged in successfully!');
       
       if (res.role === 'Mechanic' || res.role === 'Partner') {
-        navigate('/partner');
+        if (res.mechanicId) {
+          try {
+            const mechanicProfile = await apiClient<any>(`/public/mechanics/${res.mechanicId}`);
+            if (!isApprovedPartnerProfile(mechanicProfile)) {
+              navigate(`/mechanic-dashboard/${res.mechanicId}`, { replace: true });
+              return;
+            }
+          } catch {
+            navigate(`/mechanic-dashboard/${res.mechanicId}`, { replace: true });
+            return;
+          }
+        }
+        navigate('/partner', { replace: true });
       } else {
-        navigate('/customer');
+        navigate('/customer', { replace: true });
       }
     } catch (err: any) {
       toast.error(err.message || 'Login failed');
@@ -201,6 +209,12 @@ export default function CustomerAuthPage() {
   const resetOtpState = () => {
     setOtpDigits(['', '', '', '', '', '']);
     setOtpResendSeconds(60);
+  };
+
+  const resetPartnerRegisterState = () => {
+    setPartnerBusinessQuery('');
+    setPartnerBusinessResults([]);
+    setSelectedPartnerBusiness(null);
   };
 
   const handleSendOtp = async () => {
@@ -222,7 +236,11 @@ export default function CustomerAuthPage() {
         method: 'POST',
         data: { email: normalizedEmail, mobile: isPartnerLogin ? undefined : normalizedMobile }
       });
-      if (checkRes.exists) {
+      const isReusablePartnerRole =
+        isPartnerLogin &&
+        (String(checkRes.existingRole || '') === 'Mechanic' || String(checkRes.existingRole || '') === 'Partner');
+
+      if (checkRes.exists && !isReusablePartnerRole) {
         const roleLabel = checkRes.existingRole ? String(checkRes.existingRole) : 'another';
         setFieldError('email', `This email is already used by a ${roleLabel.toLowerCase()} account.`);
         toast.error(`This email is already used by a ${roleLabel.toLowerCase()} account. Please login instead.`);
@@ -325,6 +343,9 @@ export default function CustomerAuthPage() {
     if (!isValidEmail(normalizedEmail)) nextErrors.email = 'Enter a valid email address';
     if (!isPartnerLogin && !isValidIndianMobile(normalizedMobile)) nextErrors.mobile = 'Enter a valid 10-digit mobile number';
     if (!password) nextErrors.password = 'Password is required';
+    if (isPartnerLogin && password && !isStrongPartnerPassword(password)) {
+      nextErrors.password = 'Use a stronger password with 6+ chars, upper, lower, number, and special character';
+    }
     if (Object.keys(nextErrors).length > 0) {
       setFieldErrors(nextErrors);
       return toast.error(Object.values(nextErrors)[0]);
@@ -340,10 +361,21 @@ export default function CustomerAuthPage() {
       });
       
       storeSession(res);
+      const partnerMechanicId = selectedPartnerBusiness?.id ? String(selectedPartnerBusiness.id) : '';
+      if (isPartnerLogin && partnerMechanicId) localStorage.setItem('mechanicId', partnerMechanicId);
       
       toast.success('Registration successful!');
       if (isPartnerLogin) {
-        navigate('/verify-start');
+        if (partnerMechanicId) {
+          navigate(`/verify-flow/${partnerMechanicId}`, {
+            state: { accountEmail: normalizedEmail, accountPassword: password }
+          });
+        } else {
+          const setupParams = new URLSearchParams();
+          setupParams.set('setup', '1');
+          setupParams.set('newBusiness', '1');
+          navigate(`/partner/account?${setupParams.toString()}`);
+        }
       } else {
         navigate('/customer');
       }
@@ -356,17 +388,26 @@ export default function CustomerAuthPage() {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
-      toast.error('Please enter your email address');
+    const nextErrors: Record<string, string> = {};
+    if (!normalizedEmail) nextErrors.email = 'Email is required';
+    if (normalizedEmail && !isValidEmail(normalizedEmail)) nextErrors.email = 'Enter a valid email address';
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      toast.error(Object.values(nextErrors)[0]);
       return;
     }
+
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 1000));
-      toast.success('Password reset link sent to your email!');
-      setView('RESET_PASSWORD'); // Simulate clicking the link for testing
+      await apiClient<{ message: string }>('/auth/forgot-password', {
+        method: 'POST',
+        data: { email: normalizedEmail, portal }
+      });
+      toast.success('If this account exists, a reset link has been sent to your email.');
+      setView('LOGIN');
+      navigate(resetSuccessRedirect, { replace: true });
     } catch (err: any) {
-      toast.error('Failed to send reset link');
+      toast.error(err.message || 'Failed to send reset link');
     } finally {
       setLoading(false);
     }
@@ -374,17 +415,30 @@ export default function CustomerAuthPage() {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password) {
-      toast.error('Please enter a new password');
+    const nextErrors: Record<string, string> = {};
+    if (!normalizedEmail) nextErrors.email = 'Email is required';
+    if (!resetToken) nextErrors.reset = 'Reset link is invalid or missing';
+    if (!password) nextErrors.password = 'Please enter a new password';
+    if (password && password.length < 6) nextErrors.password = 'Password must be at least 6 characters';
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      toast.error(Object.values(nextErrors)[0]);
       return;
     }
+
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 1000));
+      await apiClient<{ message: string }>('/auth/reset-password', {
+        method: 'POST',
+        data: { email: normalizedEmail, token: resetToken, newPassword: password, portal }
+      });
       toast.success('Password has been reset successfully!');
       setView('LOGIN');
+      setPassword('');
+      setResetToken('');
+      navigate(resetSuccessRedirect, { replace: true });
     } catch (err: any) {
-      toast.error('Failed to reset password');
+      toast.error(err.message || 'Failed to reset password');
     } finally {
       setLoading(false);
     }
@@ -411,7 +465,7 @@ export default function CustomerAuthPage() {
           <div className="text-center mb-8">
             <h1 className="text-3xl font-black text-foreground mb-2">RoadResQ</h1>
             <p className="text-sm font-semibold text-muted-foreground">
-              {isPartnerLogin ? 'Partner Portal' : "Your Vehicle's Best Friend"}
+              {authSubtitle}
             </p>
           </div>
 
@@ -425,32 +479,21 @@ export default function CustomerAuthPage() {
                 exit="exit"
                 transition={{ duration: 0.3 }}
               >
-                <div className="space-y-4 mb-6">
-                  {!isPartnerLogin && (
+                {!isPartnerLogin && (
+                  <div className="space-y-4 mb-6">
                     <button
                       onClick={() => navigate('/customer')}
                       className="w-full flex items-center justify-center gap-2 bg-secondary/80 hover:bg-secondary text-foreground font-bold py-3 px-4 rounded-xl transition-colors border border-border/50"
                     >
                       Continue as Guest
                     </button>
-                  )}
-                  {isPartnerLogin && (
-                    <SignInButton mode="modal">
-                      <button
-                        type="button"
-                        className="w-full flex items-center justify-center gap-2 bg-card border border-border/50 hover:border-primary/30 text-foreground font-bold py-3 px-4 rounded-xl transition-all shadow-sm"
-                      >
-                        <FaGoogle className="text-red-500" />
-                        Sign in with Google
-                      </button>
-                    </SignInButton>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 <div className="relative flex items-center py-4">
                   <div className="flex-grow border-t border-border"></div>
                   <span className="flex-shrink-0 mx-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    {isPartnerLogin ? 'Or login with email' : 'Login with email'}
+                    Login with email
                   </span>
                   <div className="flex-grow border-t border-border"></div>
                 </div>
@@ -514,14 +557,14 @@ export default function CustomerAuthPage() {
                     disabled={loading}
                     className="w-full bg-primary text-primary-foreground font-black py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-primary/90 transition-all shadow-[0_4px_14px_rgba(59,130,246,0.4)] hover:shadow-[0_6px_20px_rgba(59,130,246,0.6)] hover:-translate-y-0.5 mt-2 disabled:opacity-70 disabled:hover:translate-y-0"
                   >
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Login'}
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : loginButtonLabel}
                     {!loading && <ArrowRight className="w-5 h-5" />}
                   </button>
                 </form>
 
                 <p className="text-center mt-6 text-sm font-semibold text-muted-foreground">
                   Don't have an account?{' '}
-                  <button onClick={() => { setView('REGISTER'); setRegisterStep('INITIAL'); navigate(isPartnerLogin ? '?action=register' : '?action=register', { replace: true }); }} className="text-primary font-bold hover:underline">
+                  <button onClick={() => { setView('REGISTER'); setRegisterStep('INITIAL'); navigate('?action=register', { replace: true }); }} className="text-primary font-bold hover:underline">
                     Register now
                   </button>
                 </p>
@@ -538,34 +581,20 @@ export default function CustomerAuthPage() {
                 transition={{ duration: 0.3 }}
               >
                 <button
-                  onClick={() => { setView('LOGIN'); navigate(isPartnerLogin ? '/partner/login' : '/customer/login', { replace: true }); }}
+                  onClick={() => { setView('LOGIN'); resetPartnerRegisterState(); navigate(loginPath, { replace: true }); }}
                   className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-foreground mb-6 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" /> Back to login
                 </button>
 
-                <h2 className="text-2xl font-black text-foreground mb-6">Create Account</h2>
+                <h2 className="text-2xl font-black text-foreground mb-6">{registerTitle}</h2>
                 
                 {registerStep === 'INITIAL' && (
                   <>
-                    {isPartnerLogin && (
-                      <div className="space-y-4 mb-6">
-                        <SignUpButton mode="modal">
-                          <button
-                            type="button"
-                            className="w-full flex items-center justify-center gap-2 bg-card border border-border/50 hover:border-primary/30 text-foreground font-bold py-3 px-4 rounded-xl transition-all shadow-sm"
-                          >
-                            <FaGoogle className="text-red-500" />
-                            Sign up with Google
-                          </button>
-                        </SignUpButton>
-                      </div>
-                    )}
-
                     <div className="relative flex items-center py-4 mb-2">
                       <div className="flex-grow border-t border-border"></div>
                       <span className="flex-shrink-0 mx-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                        {isPartnerLogin ? 'Or register with email' : 'Register with email'}
+                        Register with email
                       </span>
                       <div className="flex-grow border-t border-border"></div>
                     </div>
@@ -575,18 +604,7 @@ export default function CustomerAuthPage() {
                 <form onSubmit={handleRegister} className="space-y-4">
                   {registerStep === 'INITIAL' && (
                     <>
-                      {isPartnerLogin ? (
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                          <input
-                            type="text"
-                            value={mechanicQuery}
-                            onChange={(e) => setMechanicQuery(e.target.value)}
-                            placeholder="Search Mechanic (optional)"
-                            className="w-full bg-background border border-border/50 rounded-xl py-3 pl-10 pr-4 text-sm font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                          />
-                        </div>
-                      ) : (
+                      {!isPartnerLogin ? (
                         <div className="relative">
                           <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                           <span className="absolute left-10 top-1/2 -translate-y-1/2 text-sm font-bold text-foreground">+91</span>
@@ -600,6 +618,87 @@ export default function CustomerAuthPage() {
                             className={inputClass('mobile', 'py-3 pl-[4.5rem] pr-4')}
                             required
                           />
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="mb-2 block text-sm font-bold text-foreground">
+                              Search for your existing business below to start the verification process.
+                            </label>
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                              <input
+                                type="text"
+                                value={partnerBusinessQuery}
+                                onChange={(event) => setPartnerBusinessQuery(event.target.value)}
+                                placeholder="Optional: business name, mechanic name, area, or city"
+                                className="w-full rounded-xl border border-border/50 bg-background py-3 pl-10 pr-4 text-sm font-medium outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary"
+                              />
+                            </div>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              This is optional. If your business is available, select it. If not available, skip and continue.
+                            </p>
+                          </div>
+
+                          {selectedPartnerBusiness ? (
+                            <div className="flex items-start justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-foreground truncate">
+                                  {selectedPartnerBusiness.businessName || selectedPartnerBusiness.name}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground truncate">
+                                  {[selectedPartnerBusiness.area, selectedPartnerBusiness.city, selectedPartnerBusiness.mechanicType].filter(Boolean).join(' • ') || 'Existing business selected'}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPartnerBusiness(null);
+                                  setPartnerBusinessQuery('');
+                                  setPartnerBusinessResults([]);
+                                }}
+                                className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                                aria-label="Clear selected business"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {!selectedPartnerBusiness && partnerBusinessLoading ? (
+                            <div className="rounded-2xl border border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                              Searching businesses...
+                            </div>
+                          ) : null}
+
+                          {!selectedPartnerBusiness && !partnerBusinessLoading && partnerBusinessResults.length > 0 ? (
+                            <div className="space-y-2">
+                              {partnerBusinessResults.map((business) => (
+                                <button
+                                  key={business.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedPartnerBusiness(business);
+                                    setPartnerBusinessQuery(business.businessName || business.name || '');
+                                    setPartnerBusinessResults([]);
+                                  }}
+                                  className="flex w-full items-start justify-between gap-3 rounded-2xl border border-border bg-background px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-bold text-foreground">
+                                      {business.businessName || business.name}
+                                    </p>
+                                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                                      {[business.area, business.city, business.mechanicType].filter(Boolean).join(' • ')}
+                                    </p>
+                                  </div>
+                                  <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold text-primary">
+                                    Select
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       )}
                       
@@ -696,18 +795,7 @@ export default function CustomerAuthPage() {
 
                   {registerStep === 'OTP_VERIFIED' && (
                     <>
-                      {isPartnerLogin ? (
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                          <input
-                            type="text"
-                            value={mechanicQuery}
-                            onChange={(e) => setMechanicQuery(e.target.value)}
-                            placeholder="Search Mechanic (optional)"
-                            className="w-full bg-background border border-border/50 rounded-xl py-3 pl-10 pr-4 text-sm font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                          />
-                        </div>
-                      ) : (
+                      {!isPartnerLogin ? (
                         <div className="relative">
                           <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                           <span className="absolute left-10 top-1/2 -translate-y-1/2 text-sm font-bold text-foreground">+91</span>
@@ -722,7 +810,7 @@ export default function CustomerAuthPage() {
                             required
                           />
                         </div>
-                      )}
+                      ) : null}
                       
                       <div className="flex flex-col gap-2 rounded-xl border border-border/50 bg-secondary/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
@@ -755,13 +843,18 @@ export default function CustomerAuthPage() {
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
+                      {isPartnerLogin ? (
+                        <p className="text-xs text-muted-foreground">
+                          Strong password required: minimum 6 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character.
+                        </p>
+                      ) : null}
 
                       <button
                         type="submit"
                         disabled={loading}
                         className="w-full bg-primary text-primary-foreground font-black py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-primary/90 transition-all shadow-[0_4px_14px_rgba(59,130,246,0.4)] hover:shadow-[0_6px_20px_rgba(59,130,246,0.6)] hover:-translate-y-0.5 mt-6 disabled:opacity-70 disabled:hover:translate-y-0"
                       >
-                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Register'}
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : registerButtonLabel}
                       </button>
                     </>
                   )}
@@ -836,15 +929,33 @@ export default function CustomerAuthPage() {
                   Please enter your new password below.
                 </p>
 
+                {(!resetToken || !email) && (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-500">
+                    Reset link is missing or invalid. Please request a new password reset email.
+                  </div>
+                )}
+
                 <form onSubmit={handleResetPassword} className="space-y-4">
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+                      placeholder="Email address"
+                      className={inputClass('email', 'py-3 pl-10 pr-4')}
+                      required
+                    />
+                  </div>
+
                   <div className="relative">
                     <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); clearFieldError('reset'); }}
                       placeholder="New password"
-                      className="w-full bg-background border border-border/50 rounded-xl py-3 pl-10 pr-10 text-sm font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                      className={inputClass('password', 'py-3 pl-10 pr-10')}
                       required
                     />
                     <button

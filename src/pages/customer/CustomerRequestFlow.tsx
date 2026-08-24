@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, Car, Plus, AlertCircle, MapPin, Camera, CheckCircle2, Loader2, Navigation, Map as MapIcon2 } from 'lucide-react';
+import { ChevronLeft, Car, Plus, AlertCircle, MapPin, CheckCircle2, Loader2, Navigation, Map as MapIcon2 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -18,7 +18,7 @@ export default function CustomerRequestFlow() {
   const searchParams = new URLSearchParams(location.search);
   const initialService = searchParams.get('service') || '';
 
-  const { services, customerProfile, refreshCustomerProfile } = useDataContext();
+  const { vehicles, services, customerProfile, refreshCustomerProfile } = useDataContext();
   const { userLocation, locationName, locationSource, requestLocation, setLocation, isLoading: locationLoading, locationMessage } = useLocationContext();
 
   const [step, setStep] = useState(1);
@@ -32,13 +32,14 @@ export default function CustomerRequestFlow() {
   const [requestData, setRequestData] = useState({
     vehicleId: '',
     vehicleLabel: '',
+    vehicleType: '',
     problem: initialService,
     details: '',
   });
 
   useEffect(() => {
-    refreshCustomerProfile();
-  }, []);
+    void refreshCustomerProfile();
+  }, [refreshCustomerProfile]);
 
   useEffect(() => {
     if (customerProfile?.savedVehicles?.length > 0 && !requestData.vehicleId) {
@@ -46,7 +47,8 @@ export default function CustomerRequestFlow() {
       setRequestData(prev => ({
         ...prev,
         vehicleId: defaultV.id || '1',
-        vehicleLabel: `${defaultV.make} ${defaultV.model} (${defaultV.plate})`
+        vehicleLabel: `${defaultV.make} ${defaultV.model} (${defaultV.plate})`,
+        vehicleType: defaultV.type || ''
       }));
     }
   }, [customerProfile, requestData.vehicleId]);
@@ -70,7 +72,8 @@ export default function CustomerRequestFlow() {
       setRequestData(prev => ({
         ...prev,
         vehicleId: newVehicle.id,
-        vehicleLabel: `${newVehicle.make} ${newVehicle.model} (${newVehicle.plate})`
+        vehicleLabel: `${newVehicle.make} ${newVehicle.model} (${newVehicle.plate})`,
+        vehicleType: newVehicle.type || ''
       }));
       nextStep();
     } catch (err) {
@@ -92,13 +95,41 @@ export default function CustomerRequestFlow() {
   const submitRequest = async () => {
     try {
       setLoading(true);
+      const selectedService = services.find((service) => String(service.name).toLowerCase() === String(requestData.problem).toLowerCase());
+      const vehicleTypeMatch = vehicles.find((vehicle) => {
+        const vehicleName = String(vehicle.name || '').toLowerCase();
+        const chosenType = String(requestData.vehicleType || '').toLowerCase();
+        return chosenType && (vehicleName === chosenType || vehicleName.includes(chosenType) || chosenType.includes(vehicleName));
+      });
+      if (!userLocation) {
+        toast.error('Please confirm your location before submitting the request');
+        setLoading(false);
+        return;
+      }
+      if (!requestData.vehicleLabel) {
+        toast.error('Please select a vehicle before submitting the request');
+        setLoading(false);
+        return;
+      }
+      if (!requestData.problem) {
+        toast.error('Please select a service before submitting the request');
+        setLoading(false);
+        return;
+      }
+      if (!selectedService?.id) {
+        toast.error('Selected service is not available right now. Please choose another service.');
+        setLoading(false);
+        return;
+      }
+
       const payload = {
-        serviceTypeId: 1, // Mocked for MVP
+        serviceTypeId: Number(selectedService.id),
         vehicleLabel: requestData.vehicleLabel || 'Unknown Vehicle',
+        vehicleTypeId: vehicleTypeMatch?.id ? Number(vehicleTypeMatch.id) : null,
         issueSummary: requestData.problem || 'General Service',
         issueDetails: requestData.details || 'No additional details provided.',
-        latitude: userLocation ? userLocation[0] : 11.0168,
-        longitude: userLocation ? userLocation[1] : 76.9558,
+        latitude: userLocation[0],
+        longitude: userLocation[1],
         addressText: locationName || 'Unknown Location'
       };
       
@@ -178,7 +209,12 @@ export default function CustomerRequestFlow() {
                   <button 
                     key={idx}
                     onClick={() => { 
-                      setRequestData({...requestData, vehicleId: v.id || String(idx), vehicleLabel: `${v.make} ${v.model}`}); 
+                      setRequestData({
+                        ...requestData,
+                        vehicleId: v.id || String(idx),
+                        vehicleLabel: `${v.make} ${v.model} (${v.plate})`,
+                        vehicleType: v.type || ''
+                      }); 
                       nextStep(); 
                     }}
                     className={`flex items-center gap-4 bg-card border rounded-2xl p-4 transition-all text-left ${requestData.vehicleId === (v.id || String(idx)) ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-secondary/20'}`}
@@ -319,7 +355,7 @@ export default function CustomerRequestFlow() {
           {/* STEP 4: Confirm */}
           {step === 4 && (
             <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-4">
-              <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4">
                 <div className="flex items-start gap-4 pb-4 border-b border-border/50">
                   <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center shrink-0">
                     <Car className="w-5 h-5 text-foreground" />

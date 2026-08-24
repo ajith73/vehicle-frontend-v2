@@ -28,6 +28,7 @@ const CitiesPage = lazy(() => import('./pages/CitiesPage'));
 const HowItWorksPage = lazy(() => import('./pages/HowItWorksPage'));
 const MechanicProfile = lazy(() => import('./pages/MechanicProfile'));
 const PartnerPage = lazy(() => import('./pages/PartnerPage'));
+const PartnerAuthPage = lazy(() => import('./pages/partner/PartnerAuthPage'));
 const MechanicDashboard = lazy(() => import('./pages/MechanicDashboard'));
 const VerifyFlowPage = lazy(() => import('./pages/VerifyFlowPage'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
@@ -126,8 +127,6 @@ function RouteLoader() {
   );
 }
 
-import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
-
 const publicRoutes = (
   <Route element={<PublicLayout />}>
     <Route path="/" element={<LandingPage />} />
@@ -146,8 +145,7 @@ const publicRoutes = (
     <Route path="/for-partners" element={<PartnerPage />} />
     <Route path="/feedback" element={<Suspense fallback={<RouteLoader />}><FeedbackPage /></Suspense>} />
     <Route path="/customer/login" element={<Suspense fallback={<RouteLoader />}><CustomerAuthPage /></Suspense>} />
-    <Route path="/partner/login" element={<Suspense fallback={<RouteLoader />}><CustomerAuthPage /></Suspense>} />
-    <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback signUpFallbackRedirectUrl="/customer/login" signInFallbackRedirectUrl="/customer/login" />} />
+    <Route path="/partner/login" element={<Suspense fallback={<RouteLoader />}><PartnerAuthPage /></Suspense>} />
   </Route>
 );
 

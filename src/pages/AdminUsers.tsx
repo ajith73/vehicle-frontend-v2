@@ -21,6 +21,7 @@ interface User {
 const AVAILABLE_SCREENS = [
   { value: 'Dashboard', label: 'Dashboard' },
   { value: 'Mechanics', label: 'Mechanics' },
+  { value: 'Verifications', label: 'Verifications' },
   { value: 'GMaps Import', label: 'GMaps Import' },
   { value: 'Updates', label: 'Updates' },
   { value: 'Feedback', label: 'Feedback' },

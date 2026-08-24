@@ -1,12 +1,82 @@
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { useState } from 'react';
-import { Briefcase, Clock, DollarSign, TrendingUp, User, Power, Moon, Sun } from 'lucide-react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Briefcase, Clock, DollarSign, TrendingUp, User, Power, Moon, Sun, Loader2, LogOut } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { apiClient } from '../../api/apiClient';
+import toast from 'react-hot-toast';
+
+const PARTNER_LIVE_STATE_EVENT = 'roadresq:partner-live-state-changed';
 
 export default function PartnerLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(false);
+  const [loadingState, setLoadingState] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
+  const [profileResolved, setProfileResolved] = useState(false);
+  const storedMechanicId = localStorage.getItem('mechanicId');
+  const pendingVerificationStatus = String(profile?.pendingVerification?.status || '').toLowerCase();
+  const isPartnerApproved =
+    profile?.status === 'Approved' &&
+    Number(profile?.verificationLevel || 0) >= 1 &&
+    pendingVerificationStatus !== 'pending' &&
+    pendingVerificationStatus !== 'rejected';
+
+  const loadPartnerShell = async () => {
+    const mechanicId = localStorage.getItem('mechanicId');
+    if (!mechanicId) {
+      setProfile(null);
+      setIsOnline(false);
+      setProfileResolved(true);
+      return;
+    }
+
+    try {
+      const data = await apiClient<any>(`/public/mechanics/${mechanicId}`);
+      setProfile(data);
+      setIsOnline(Boolean(data?.MechanicLiveState?.isOnline ?? data?.isOnline));
+    } catch {
+      setProfile(null);
+    } finally {
+      setProfileResolved(true);
+    }
+  };
+
+  useEffect(() => {
+    void loadPartnerShell();
+  }, []);
+
+  useEffect(() => {
+    const handleStateSync = (event: Event) => {
+      const customEvent = event as CustomEvent<{ isOnline?: boolean }>;
+      if (typeof customEvent.detail?.isOnline === 'boolean') {
+        setIsOnline(customEvent.detail.isOnline);
+      } else {
+        void loadPartnerShell();
+      }
+    };
+
+    window.addEventListener(PARTNER_LIVE_STATE_EVENT, handleStateSync as EventListener);
+    window.addEventListener('storage', handleStateSync as EventListener);
+
+    return () => {
+      window.removeEventListener(PARTNER_LIVE_STATE_EVENT, handleStateSync as EventListener);
+      window.removeEventListener('storage', handleStateSync as EventListener);
+    };
+  }, []);
+
+  const isLegacyPartnerFlow =
+    location.pathname.startsWith('/mechanic-dashboard/') ||
+    location.pathname.startsWith('/verify-flow/');
+
+  useEffect(() => {
+    if (!profileResolved || isLegacyPartnerFlow) return;
+    const fallbackMechanicId = profile?.id || storedMechanicId;
+    if (fallbackMechanicId && !isPartnerApproved) {
+      navigate(`/mechanic-dashboard/${fallbackMechanicId}`, { replace: true });
+    }
+  }, [profileResolved, profile?.id, storedMechanicId, isPartnerApproved, isLegacyPartnerFlow, navigate]);
 
   const navItems = [
     { label: 'Home', href: '/partner', icon: Briefcase, activePath: '/partner' },
@@ -23,6 +93,65 @@ export default function PartnerLayout() {
     return location.pathname.startsWith(path);
   };
 
+  const displayName = profile?.businessName || profile?.name || 'Partner';
+  const partnerId = profile?.id || localStorage.getItem('mechanicId');
+  const avatarName = encodeURIComponent(displayName);
+
+  const handleToggleOnline = async () => {
+    setLoadingState(true);
+    try {
+      if (isOnline) {
+        await apiClient('/mechanic/live/go-offline', {
+          method: 'POST',
+          data: { notes: 'Changed from partner shell' }
+        });
+        setIsOnline(false);
+        toast.success('You are now offline');
+        window.dispatchEvent(new CustomEvent(PARTNER_LIVE_STATE_EVENT, { detail: { isOnline: false } }));
+      } else {
+        await apiClient('/mechanic/live/go-online', {
+          method: 'POST',
+          data: { availabilityState: 'ONLINE_IDLE' }
+        });
+        setIsOnline(true);
+        toast.success('You are now online');
+        window.dispatchEvent(new CustomEvent(PARTNER_LIVE_STATE_EVENT, { detail: { isOnline: true } }));
+      }
+      await loadPartnerShell();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to change online status');
+    } finally {
+      setLoadingState(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('mechanicId');
+    localStorage.removeItem('role');
+    window.location.href = '/partner/login';
+  };
+
+  if (isLegacyPartnerFlow) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <Outlet />
+      </div>
+    );
+  }
+
+  if (!profileResolved) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="flex items-center gap-3 text-sm font-semibold text-muted-foreground">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          Checking partner access...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-[100dvh] bg-background text-foreground selection:bg-primary/20">
       
@@ -31,11 +160,11 @@ export default function PartnerLayout() {
         <div className="max-w-7xl mx-auto flex justify-between items-center w-full">
           <div className="flex items-center gap-3">
              <div className="w-10 h-10 rounded-full bg-secondary overflow-hidden shrink-0">
-               <img src="https://ui-avatars.com/api/?name=Ramesh+K&background=random" alt="Partner" className="w-full h-full object-cover" />
+               <img src={`https://ui-avatars.com/api/?name=${avatarName}&background=random`} alt={displayName} className="w-full h-full object-cover" />
              </div>
              <div className="hidden lg:block">
-               <h1 className="text-sm font-black text-foreground">Good morning, Ramesh</h1>
-               <p className="text-xs font-semibold text-muted-foreground mt-0.5">Partner ID: P-10023</p>
+               <h1 className="text-sm font-black text-foreground">Welcome back, {displayName}</h1>
+               <p className="text-xs font-semibold text-muted-foreground mt-0.5">Partner ID: {partnerId ? `P-${partnerId}` : 'Not linked'}</p>
              </div>
           </div>
 
@@ -61,22 +190,32 @@ export default function PartnerLayout() {
           <div className="flex items-center gap-3">
             {/* ONLINE / OFFLINE Toggle */}
             <button 
-              onClick={() => setIsOnline(!isOnline)}
+              onClick={handleToggleOnline}
+              disabled={loadingState}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full border-2 transition-all font-bold text-xs ${
                 isOnline 
                   ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' 
                   : 'bg-secondary border-border text-muted-foreground'
               }`}
             >
-               <Power className={`w-3.5 h-3.5 ${isOnline ? 'text-emerald-500' : 'text-muted-foreground'}`} />
-               {isOnline ? 'ONLINE' : 'OFFLINE'}
+               {loadingState ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className={`w-3.5 h-3.5 ${isOnline ? 'text-emerald-500' : 'text-muted-foreground'}`} />}
+               {loadingState ? 'UPDATING' : isOnline ? 'ONLINE' : 'OFFLINE'}
             </button>
 
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+              className="hidden sm:inline-flex p-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+              aria-label="Toggle theme"
             >
               {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="hidden md:inline-flex p-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+              aria-label="Logout"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -85,7 +224,7 @@ export default function PartnerLayout() {
       {/* Main Content Area */}
       <main className="flex-1 overflow-hidden relative">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/10 -z-10" />
-        <div className="h-full overflow-y-auto">
+        <div className="h-full overflow-y-auto pb-[calc(88px+env(safe-area-inset-bottom))] sm:pb-0">
           <Outlet />
         </div>
       </main>

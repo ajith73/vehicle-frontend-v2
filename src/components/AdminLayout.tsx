@@ -91,12 +91,13 @@ export default function AdminLayout() {
 
   const navItems = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
+    { name: 'Mechanics', path: '/admin/mechanics', icon: Wrench }, // Legacy
     { name: 'Live Operations', path: '/admin/v2/live-ops', icon: Radio },
     { name: 'Dispatch', path: '/admin/v2/dispatch', icon: Truck },
     { name: 'Requests', path: '/admin/v2/requests', icon: ClipboardList },
     { name: 'Customers', path: '/admin/v2/customers', icon: Users },
     { name: 'Partners', path: '/admin/v2/partners', icon: Wrench },
-    { name: 'Verification', path: '/admin/verifications', icon: ShieldCheck }, // Legacy
+    { name: 'Verifications', path: '/admin/verifications', icon: ShieldCheck }, // Legacy
     { name: 'Payments', path: '/admin/v2/payments', icon: Wallet },
     { name: 'Settlements', path: '/admin/settlements', icon: Landmark }, // Legacy
     { name: 'Reviews', path: '/admin/reviews', icon: Star }, // Legacy
@@ -119,12 +120,13 @@ export default function AdminLayout() {
   
   const routeAccessMap: Record<string, string> = {
     '/admin/dashboard': 'Dashboard',
+    '/admin/mechanics': 'Mechanics',
     '/admin/v2/live-ops': 'Live Operations',
     '/admin/v2/dispatch': 'Dispatch',
     '/admin/v2/requests': 'Requests',
     '/admin/v2/customers': 'Customers',
     '/admin/v2/partners': 'Partners',
-    '/admin/verifications': 'Verification',
+    '/admin/verifications': 'Verifications',
     '/admin/v2/payments': 'Payments',
     '/admin/settlements': 'Settlements',
     '/admin/reviews': 'Reviews',
@@ -147,6 +149,12 @@ export default function AdminLayout() {
     // Rely strictly on server profile if it has loaded
     if (profile) {
       if (profile.role === 'Super Admin') return true;
+      if (screen === 'Mechanics') {
+        return profile.allowedScreens?.includes('Mechanics') || profile.allowedScreens?.includes('Partners') || false;
+      }
+      if (screen === 'Verifications') {
+        return profile.allowedScreens?.includes('Verifications') || profile.allowedScreens?.includes('Verification') || profile.allowedScreens?.includes('Partners') || false;
+      }
       if (screen === 'Zones' || screen === 'Pricing') {
         return profile.allowedScreens?.includes('Cities') || false;
       }

@@ -7,11 +7,13 @@ import type { User } from '../../types';
 
 const defaultModules = [
   'Dashboard',
+  'Mechanics',
   'Live Operations',
   'Requests',
   'Dispatch',
   'Customers',
   'Partners',
+  'Verifications',
   'Payments',
   'Support',
   'Analytics',

@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Building, Settings, FileText, Image as ImageIcon, Edit, LogOut, ExternalLink, MapPin, Navigation, Check, Clock, Info, Radio, LocateFixed, TrendingUp } from 'lucide-react';
+import { Building, Settings, FileText, Image as ImageIcon, Edit, LogOut, ExternalLink, MapPin, Navigation, Check, Clock, Info } from 'lucide-react';
 import { apiClient } from '../api/apiClient';
-import type { Mechanic, MechanicPerformanceInsights } from '../types';
+import type { Mechanic } from '../types';
 import toast from 'react-hot-toast';
 import { LazyImage } from '../components/shared/LazyImage';
-import { MechanicJobInbox } from '../components/partner/MechanicJobInbox';
 
 export default function MechanicDashboard() {
   const { id } = useParams<{ id: string }>();
@@ -15,10 +14,7 @@ export default function MechanicDashboard() {
 
   const [mechanic, setMechanic] = useState<Mechanic | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'contact' | 'business-docs' | 'common-info' | 'services' | 'jobs' | 'insights'>('contact');
-  const [liveSaving, setLiveSaving] = useState(false);
-  const [locationSaving, setLocationSaving] = useState(false);
-  const [performanceInsights, setPerformanceInsights] = useState<MechanicPerformanceInsights | null>(null);
+  const [activeTab, setActiveTab] = useState<'contact' | 'business-docs' | 'common-info' | 'services'>('contact');
 
   // Any pending verification data (unapproved edits)
   const [pendingData, setPendingData] = useState<any>({});
@@ -46,18 +42,6 @@ export default function MechanicDashboard() {
     fetchMechanic();
   }, [id, navigate]);
 
-  useEffect(() => {
-    const loadInsights = async () => {
-      try {
-        const data = await apiClient<MechanicPerformanceInsights>('/mechanic/performance/insights');
-        setPerformanceInsights(data);
-      } catch {
-        // Keep dashboard usable even if analytics is not available yet.
-      }
-    };
-    loadInsights();
-  }, []);
-
   const handleEdit = (step: number) => {
     navigate(`/verify-flow/${id}`, {
       state: { accountEmail, accountPassword, initialStep: step, singleEdit: true }
@@ -66,77 +50,10 @@ export default function MechanicDashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('mechanicId');
     localStorage.removeItem('role');
-    navigate('/verify-start');
-  };
-
-  const handleGoOnline = async () => {
-    setLiveSaving(true);
-    try {
-      await apiClient('/mechanic/live/go-online', {
-        method: 'POST',
-        data: {
-          availabilityState: 'ONLINE_IDLE'
-        }
-      });
-      await fetchMechanic(false);
-      toast.success('You are now online for dispatch');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to go online');
-    } finally {
-      setLiveSaving(false);
-    }
-  };
-
-  const handleGoOffline = async () => {
-    setLiveSaving(true);
-    try {
-      await apiClient('/mechanic/live/go-offline', {
-        method: 'POST',
-        data: {}
-      });
-      await fetchMechanic(false);
-      toast.success('You are now offline');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to go offline');
-    } finally {
-      setLiveSaving(false);
-    }
-  };
-
-  const handleLocationPing = async () => {
-    if (!navigator.geolocation) {
-      toast.error('Geolocation is not available in this browser');
-      return;
-    }
-
-    setLocationSaving(true);
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      try {
-        await apiClient('/mechanic/live/location', {
-          method: 'POST',
-          data: {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracyMeters: position.coords.accuracy,
-            heading: position.coords.heading ?? undefined,
-            availabilityState: displayData.availabilityState || 'ONLINE_BUSY'
-          }
-        });
-        await fetchMechanic(false);
-        toast.success('Live location updated');
-      } catch (error: any) {
-        toast.error(error.message || 'Failed to update live location');
-      } finally {
-        setLocationSaving(false);
-      }
-    }, () => {
-      setLocationSaving(false);
-      toast.error('Location access was denied');
-    }, {
-      enableHighAccuracy: true,
-      timeout: 10000
-    });
+    navigate('/partner/login', { replace: true });
   };
 
   if (loading) {
@@ -259,9 +176,7 @@ export default function MechanicDashboard() {
               { id: 'contact', label: 'Profile', icon: Building, step: 1 },
               { id: 'business-docs', label: 'Business Docs', icon: FileText, step: 2 },
               { id: 'common-info', label: 'Common Info', icon: ImageIcon, step: 3 },
-              { id: 'services', label: 'Services', icon: Settings, step: 4 },
-              { id: 'jobs', label: 'Jobs', icon: Clock, step: 5 },
-              { id: 'insights', label: 'Insights', icon: TrendingUp, step: 6 }
+              { id: 'services', label: 'Services', icon: Settings, step: 4 }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -579,136 +494,9 @@ export default function MechanicDashboard() {
               </div>
             )}
 
-            {activeTab === 'jobs' && (
-              <div className="animate-in fade-in slide-in-from-right-4">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold">Assigned Jobs</h2>
-                  <span className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary">
-                    Phase 6 live ops
-                  </span>
-                </div>
-                <div className="rounded-2xl border border-border bg-muted/20 p-5 mb-6">
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Radio className="text-primary" size={18} />
-                        <h3 className="text-lg font-bold text-foreground">Partner Live Status</h3>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Your online presence now affects dispatch visibility and live customer progress updates.
-                      </p>
-                      <div className="flex flex-wrap gap-2 mt-4">
-                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                          displayData.isOnline
-                            ? 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20'
-                            : 'bg-muted text-muted-foreground border border-border'
-                        }`}>
-                          {displayData.isOnline ? 'ONLINE' : 'OFFLINE'}
-                        </span>
-                        <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-secondary text-secondary-foreground border border-border">
-                          {displayData.availabilityState || 'OFFLINE'}
-                        </span>
-                        {displayData.lastActiveAt && (
-                          <span className="px-3 py-1.5 rounded-lg text-xs font-medium bg-background text-muted-foreground border border-border">
-                            Last active {new Date(displayData.lastActiveAt).toLocaleString('en-IN')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        onClick={handleGoOnline}
-                        disabled={liveSaving || displayData.isOnline}
-                        className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                      >
-                        Go online
-                      </button>
-                      <button
-                        onClick={handleGoOffline}
-                        disabled={liveSaving || !displayData.isOnline}
-                        className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-bold text-foreground hover:bg-secondary disabled:opacity-60"
-                      >
-                        Go offline
-                      </button>
-                      <button
-                        onClick={handleLocationPing}
-                        disabled={locationSaving}
-                        className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-bold text-primary hover:bg-primary/10 disabled:opacity-60 flex items-center gap-2"
-                      >
-                        <LocateFixed size={16} /> Share live location
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                {id ? <MechanicJobInbox mechanicId={id} /> : null}
-              </div>
-            )}
-
-            {activeTab === 'insights' && (
-              <div className="animate-in fade-in slide-in-from-right-4">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold">Performance Insights</h2>
-                  <span className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary">
-                    Phase 7 marketplace intelligence
-                  </span>
-                </div>
-
-                {performanceInsights ? (
-                  <div className="space-y-6">
-                    <div className="rounded-2xl border border-border bg-muted/20 p-5">
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                        <div>
-                          <h3 className="text-lg font-bold text-foreground">{performanceInsights.mechanicName}</h3>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {performanceInsights.city || displayData.city || 'Unknown city'} • {performanceInsights.trusted ? 'Trusted partner signal active' : 'Standard partner signal'}
-                          </p>
-                        </div>
-                        <div className="rounded-2xl bg-primary/10 px-5 py-4 text-center">
-                          <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Marketplace Score</p>
-                          <p className="mt-2 text-3xl font-black text-foreground">{performanceInsights.score}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <InsightCard title="Accept Rate" value={`${performanceInsights.metrics?.acceptRate ?? 0}%`} note="Dispatch attempts accepted" />
-                      <InsightCard title="Completion Rate" value={`${performanceInsights.metrics?.completionRate ?? 0}%`} note="Assigned jobs completed" />
-                      <InsightCard title="Quote Approval" value={`${performanceInsights.metrics?.quoteApprovalRate ?? 0}%`} note="Customer-approved quotes" />
-                      <InsightCard title="ETA Trend" value={performanceInsights.metrics?.averageEtaMinutes != null ? `${performanceInsights.metrics.averageEtaMinutes} min` : 'N/A'} note="Average ETA snapshot" />
-                    </div>
-
-                    <div className="rounded-2xl border border-border bg-card p-5">
-                      <h3 className="text-base font-bold text-foreground">Actionable improvements</h3>
-                      <div className="mt-4 space-y-3">
-                        {performanceInsights.improvements.map((item, index) => (
-                          <div key={`${item}-${index}`} className="rounded-xl border border-border/60 bg-background/70 px-4 py-3 text-sm text-foreground">
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-sm text-muted-foreground">
-                    Performance insights will appear here once the analytics layer has enough partner data.
-                  </div>
-                )}
-              </div>
-            )}
-            
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function InsightCard({ title, value, note }: { title: string; value: string; note: string }) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">{title}</p>
-      <p className="mt-3 text-2xl font-black text-foreground">{value}</p>
-      <p className="mt-2 text-xs text-muted-foreground">{note}</p>
     </div>
   );
 }

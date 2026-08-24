@@ -5,6 +5,7 @@ import { apiClient } from '../../api/apiClient';
 import { openRealtimeStream } from '../../api/realtime';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getRequestStatusMeta, isCancelledRequestStatus, isCompletedRequestStatus, getRequestToneClasses } from '../../lib/requestLifecycle';
+import toast from 'react-hot-toast';
 
 type Tab = 'AVAILABLE' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
@@ -51,18 +52,20 @@ export default function PartnerRequestsPage() {
   const handleAccept = async (id: number) => {
     try {
       await apiClient(`/mechanic/jobs/${id}/accept`, { method: 'POST' });
+      toast.success('Request accepted');
       navigate(`/partner/request/${id}`);
-    } catch (err) {
-      console.error("Failed to accept job", err);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to accept request');
     }
   };
 
   const handleReject = async (id: number) => {
     try {
       await apiClient(`/mechanic/jobs/${id}/reject`, { method: 'POST', data: { reason: 'Busy' } });
-      fetchJobs();
-    } catch (err) {
-      console.error("Failed to reject job", err);
+      toast.success('Request rejected');
+      void fetchJobs();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reject request');
     }
   };
 

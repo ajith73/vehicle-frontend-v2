@@ -6,6 +6,8 @@ import { openRealtimeStream } from '../../api/realtime';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 
+const PARTNER_LIVE_STATE_EVENT = 'roadresq:partner-live-state-changed';
+
 export default function PartnerDashboard() {
   const [isOnline, setIsOnline] = useState(false);
   const [jobs, setJobs] = useState<any[]>([]);
@@ -38,7 +40,10 @@ export default function PartnerDashboard() {
     try {
       const earningsRes = await apiClient<any>('/mechanic/earnings');
       if (earningsRes && earningsRes.summary) {
-        setEarnings({ today: earningsRes.summary.today || 0, growth: 12 });
+        const today = Number(earningsRes.summary.today || 0);
+        const week = Number(earningsRes.summary.week || 0);
+        const growth = week > 0 ? Math.max(0, Math.round((today / week) * 100)) : 0;
+        setEarnings({ today, growth });
       }
     } catch (e) {
       setEarnings({ today: 0, growth: 0 });
@@ -86,6 +91,20 @@ export default function PartnerDashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleLiveState = (event: Event) => {
+      const customEvent = event as CustomEvent<{ isOnline?: boolean }>;
+      if (typeof customEvent.detail?.isOnline === 'boolean') {
+        setIsOnline(customEvent.detail.isOnline);
+      } else {
+        void fetchJobsData();
+      }
+    };
+
+    window.addEventListener(PARTNER_LIVE_STATE_EVENT, handleLiveState as EventListener);
+    return () => window.removeEventListener(PARTNER_LIVE_STATE_EVENT, handleLiveState as EventListener);
+  }, []);
+
   const fetchJobsData = async () => {
     try {
       const mechanicId = localStorage.getItem('mechanicId');
@@ -118,9 +137,11 @@ export default function PartnerDashboard() {
       if (newState) {
         await apiClient('/mechanic/live/go-online', { method: 'POST', data: { availabilityState: 'ONLINE_IDLE' } });
         toast.success("You are now Online");
+        window.dispatchEvent(new CustomEvent(PARTNER_LIVE_STATE_EVENT, { detail: { isOnline: true } }));
       } else {
         await apiClient('/mechanic/live/go-offline', { method: 'POST', data: { notes: 'Going offline manually' } });
         toast.success("You are now Offline");
+        window.dispatchEvent(new CustomEvent(PARTNER_LIVE_STATE_EVENT, { detail: { isOnline: false } }));
       }
       await fetchStaticData();
       await fetchJobsData();
@@ -134,6 +155,13 @@ export default function PartnerDashboard() {
   const currentJob = activeJobs.length > 0 ? activeJobs[0] : null;
   const completedJobs = jobs.filter(j => j.status === 'SERVICE_COMPLETED').length;
   const liveNotifications = jobs.filter(j => ['ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED'].includes(j.status)).length;
+  const availableJobs = jobs.filter(j => j.status === 'ASSIGNED').length;
+  const areaDemandTitle = availableJobs > 0 ? 'Requests Waiting Nearby' : isOnline ? 'Coverage Active' : 'Go Online For Demand';
+  const areaDemandSubtitle = availableJobs > 0
+    ? `${availableJobs} request${availableJobs > 1 ? 's are' : ' is'} waiting for partner response`
+    : isOnline
+      ? `${liveNotifications} live dispatch update${liveNotifications === 1 ? '' : 's'} in your current feed`
+      : 'Turn on availability to receive nearby requests';
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-full bg-background p-4 max-w-lg mx-auto pb-32">
@@ -156,9 +184,11 @@ export default function PartnerDashboard() {
         <h2 className="text-sm font-bold uppercase tracking-wider text-primary-foreground/80 mb-1">Today's Earnings</h2>
         <div className="flex items-end gap-3 relative z-10">
           <span className="text-4xl font-black">₹{earnings.today.toLocaleString()}</span>
-          <span className="text-sm font-bold text-emerald-300 mb-1 flex items-center gap-1">
-            <TrendingUp className="w-4 h-4" /> +{earnings.growth}%
-          </span>
+          {earnings.growth > 0 ? (
+            <span className="text-sm font-bold text-emerald-300 mb-1 flex items-center gap-1">
+              <TrendingUp className="w-4 h-4" /> {earnings.growth}% of weekly net
+            </span>
+          ) : null}
         </div>
       </motion.div>
 
@@ -246,8 +276,8 @@ export default function PartnerDashboard() {
           <MapPin className="w-5 h-5 text-destructive" />
         </div>
         <div>
-          <h4 className="font-bold text-foreground">High Demand Nearby</h4>
-          <p className="text-xs text-muted-foreground mt-0.5">Multiple requests in your area</p>
+          <h4 className="font-bold text-foreground">{areaDemandTitle}</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">{areaDemandSubtitle}</p>
         </div>
       </div>
 

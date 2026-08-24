@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '../../api/apiClient';
 import toast from 'react-hot-toast';
 
+const CUSTOMER_NOTIFICATION_READ_KEY = 'roadresq.customer.notification-read';
+
 type CustomerNotification = {
   id: string;
   type: 'ALERT' | 'SUCCESS' | 'WARNING' | 'SYSTEM';
@@ -17,11 +19,28 @@ export default function CustomerNotificationsPage() {
   const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const getStoredReadIds = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(CUSTOMER_NOTIFICATION_READ_KEY) || '[]');
+      return Array.isArray(parsed) ? new Set(parsed.map(String)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  const persistReadIds = (ids: Set<string>) => {
+    localStorage.setItem(CUSTOMER_NOTIFICATION_READ_KEY, JSON.stringify(Array.from(ids)));
+  };
+
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
         const data = await apiClient<CustomerNotification[]>('/customer/notifications');
-        setNotifications(data || []);
+        const storedReadIds = getStoredReadIds();
+        setNotifications((data || []).map((notification) => ({
+          ...notification,
+          read: notification.read || storedReadIds.has(String(notification.id))
+        })));
       } catch (error) {
         toast.error('Failed to load notifications');
       } finally {
@@ -35,10 +54,16 @@ export default function CustomerNotificationsPage() {
   const unreadCount = useMemo(() => notifications.filter((notification) => !notification.read).length, [notifications]);
 
   const markAllRead = () => {
+    const ids = getStoredReadIds();
+    notifications.forEach((notification) => ids.add(String(notification.id)));
+    persistReadIds(ids);
     setNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
   };
 
   const markRead = (id: string) => {
+    const ids = getStoredReadIds();
+    ids.add(String(id));
+    persistReadIds(ids);
     setNotifications((current) => current.map((notification) => notification.id === id ? { ...notification, read: true } : notification));
   };
 
