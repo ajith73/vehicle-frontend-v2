@@ -1,0 +1,409 @@
+import React, { useEffect } from 'react';
+import { X, Wrench, MapPin, Info, Star, Phone, MessageSquare, MessageCircle, Mail, Globe, Navigation } from 'lucide-react';
+import { getMechanicStatus, getDistanceFromLatLonInKm } from '../../utils/mechanicUtils';
+import { MechanicReviews } from './MechanicReviews';
+import { LazyImage } from './LazyImage';
+
+interface MechanicDetailsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedMechanicForDetails: any;
+  userLocation: [number, number] | null;
+  onNavigate: () => void;
+}
+
+export function MechanicDetailsModal({
+  isOpen,
+  onClose,
+  selectedMechanicForDetails,
+  userLocation,
+  onNavigate
+}: MechanicDetailsModalProps) {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+  if (!isOpen || !selectedMechanicForDetails) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+      <div 
+        className="bg-card w-full max-w-lg rounded-[24px] shadow-2xl border border-border overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 max-h-[90vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="relative h-32 sm:h-40 shrink-0 bg-secondary/50">
+          {selectedMechanicForDetails.image || selectedMechanicForDetails.imageUrl ? (
+            <LazyImage src={selectedMechanicForDetails.image || selectedMechanicForDetails.imageUrl} alt={selectedMechanicForDetails.businessName || selectedMechanicForDetails.name || 'Mechanic listing image'} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Wrench className="w-16 h-16 text-muted-foreground/30" />
+            </div>
+          )}
+          {(selectedMechanicForDetails.rating || selectedMechanicForDetails.rating > 0) ? (
+            <div className="absolute bottom-0 right-0 bg-black/80 backdrop-blur-sm text-white rounded-tl-2xl px-3 py-1.5 shadow-lg flex items-center gap-1.5 z-10">
+              <span className="text-sm font-bold leading-none mr-0.5">{selectedMechanicForDetails.rating}</span>
+              <div className="flex items-center">
+                {[...Array(5)].map((_, i) => (
+                  <Star 
+                    key={i} 
+                    className={`w-3.5 h-3.5 ${i < Math.round(selectedMechanicForDetails.rating) ? 'text-yellow-400 fill-current' : 'text-gray-400/50 fill-current'}`} 
+                  />
+                ))}
+              </div>
+              <span className="text-xs font-medium text-white/80 ml-0.5">({selectedMechanicForDetails.reviewCount || 0})</span>
+            </div>
+          ) : null}
+          <button 
+            onClick={onClose}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 backdrop-blur-md transition-colors shadow-lg z-10"
+            aria-label="Close mechanic details"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+          {/* Title and Location */}
+          <div className="border-b border-border/50 pb-4">
+            <h3 className="font-black text-2xl text-foreground leading-tight">
+              {selectedMechanicForDetails.businessName || selectedMechanicForDetails.name}
+            </h3>
+            <p className="text-muted-foreground text-sm flex items-start gap-1.5 mt-2 font-medium">
+              <MapPin size={14} className="text-primary mt-0.5 shrink-0" /> 
+              <span className="leading-snug">
+                {selectedMechanicForDetails.address || 
+                 selectedMechanicForDetails.shopAddress || 
+                 [
+                   selectedMechanicForDetails.area, 
+                   selectedMechanicForDetails.landmark, 
+                   selectedMechanicForDetails.city, 
+                   selectedMechanicForDetails.state, 
+                   selectedMechanicForDetails.pincode
+                 ].filter(Boolean).join(', ')}
+              </span>
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-secondary/30 p-4 rounded-2xl border border-border/50">
+              <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block mb-1.5">Current Status</span>
+              <div className="flex items-center gap-2">
+                <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${getMechanicStatus(selectedMechanicForDetails) === 'Available' ? 'bg-green-500 shadow-green-500/50' : 'bg-red-500 shadow-red-500/50'}`}></div>
+                <span className="font-bold text-sm text-foreground">{getMechanicStatus(selectedMechanicForDetails)}</span>
+              </div>
+            </div>
+            {(userLocation || (selectedMechanicForDetails.dist !== null && selectedMechanicForDetails.dist !== undefined)) && (
+              <div className="bg-secondary/30 p-4 rounded-2xl border border-border/50">
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block mb-1.5">Distance</span>
+                <span className="font-bold text-sm text-foreground text-primary">
+                  {selectedMechanicForDetails.dist !== undefined 
+                    ? selectedMechanicForDetails.dist?.toFixed(1) 
+                    : userLocation 
+                      ? getDistanceFromLatLonInKm(userLocation[0], userLocation[1], selectedMechanicForDetails.latitude, selectedMechanicForDetails.longitude).toFixed(1)
+                      : '?'} km away
+                </span>
+              </div>
+            )}
+          </div>
+          
+          {((selectedMechanicForDetails.phone?.length > 0) || (selectedMechanicForDetails.emails?.length > 0) || selectedMechanicForDetails.websiteUrl) && (
+            <div className="mt-4">
+              <h4 className="mb-4 flex items-center gap-2 text-sm font-bold text-foreground">
+                <Phone size={16} className="text-primary" /> Contact Information
+              </h4>
+              <div className="flex flex-col gap-4 rounded-xl border border-border/30 bg-secondary/10 p-4 shadow-sm">
+                {(() => {
+                  let phoneCount = 0;
+                  let telCount = 0;
+                  return selectedMechanicForDetails.phone?.map((p: any, idx: number) => {
+                    let label = '';
+                    if (p.isTelephone) {
+                      telCount++;
+                      label = telCount === 1 ? 'Primary Landline' : telCount === 2 ? 'Secondary Landline' : `Secondary Landline ${telCount - 1}`;
+                    } else {
+                      phoneCount++;
+                      label = phoneCount === 1 ? 'Primary Contact' : phoneCount === 2 ? 'Secondary Contact' : `Secondary Contact ${phoneCount - 1}`;
+                    }
+                    return (
+                      <React.Fragment key={idx}>
+                        <div className="flex flex-col gap-3">
+                          <span className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                            <span className="text-muted-foreground">👤</span> {label}
+                          </span>
+                          <div className="flex flex-wrap gap-2.5">
+                            <a href={`tel:${p.number}`} className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-xl bg-blue-500/10 px-4 py-2.5 text-sm font-bold text-blue-600 transition-all hover:bg-blue-500 hover:text-white shadow-sm hover:shadow-blue-500/25 active:scale-95" title="Call">
+                              <Phone size={16} /> Call
+                            </a>
+                            {p.isWhatsapp && (
+                              <a href={`https://wa.me/91${p.number}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-xl bg-green-500/10 px-4 py-2.5 text-sm font-bold text-green-600 transition-all hover:bg-green-500 hover:text-white shadow-sm hover:shadow-green-500/25 active:scale-95" title="WhatsApp">
+                                <MessageCircle size={16} /> WhatsApp
+                              </a>
+                            )}
+                            {!p.isTelephone && (
+                              <a href={`sms:${p.number}`} className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-xl bg-purple-500/10 px-4 py-2.5 text-sm font-bold text-purple-600 transition-all hover:bg-purple-500 hover:text-white shadow-sm hover:shadow-purple-500/25 active:scale-95" title="SMS">
+                                <MessageSquare size={16} /> SMS
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        {idx < selectedMechanicForDetails.phone.length - 1 && <hr className="border-border/50" />}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
+
+                {selectedMechanicForDetails.phone?.length > 0 && selectedMechanicForDetails.emails?.length > 0 && (
+                  <hr className="border-border/50" />
+                )}
+                
+                {selectedMechanicForDetails.emails?.map((email: string, idx: number) => {
+                  const label = idx === 0 ? 'Primary Email' : idx === 1 ? 'Secondary Email' : `Secondary Email ${idx}`;
+                  return (
+                    <React.Fragment key={`email-${idx}`}>
+                      <div className="flex flex-col gap-3">
+                        <span className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                          <span className="text-muted-foreground">✉️</span> {label}
+                        </span>
+                        <div className="flex flex-wrap gap-2.5">
+                          <a href={`mailto:${email}`} className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-xl bg-orange-500/10 px-4 py-2.5 text-sm font-bold text-orange-600 transition-all hover:bg-orange-500 hover:text-white shadow-sm hover:shadow-orange-500/25 active:scale-95" title="Email">
+                            <Mail size={16} /> Send Email
+                          </a>
+                        </div>
+                      </div>
+                      {idx < selectedMechanicForDetails.emails.length - 1 && <hr className="border-border/50" />}
+                    </React.Fragment>
+                  );
+                })}
+
+                {(selectedMechanicForDetails.phone?.length > 0 || selectedMechanicForDetails.emails?.length > 0) && selectedMechanicForDetails.websiteUrl && (
+                  <hr className="border-border/50" />
+                )}
+                
+                {selectedMechanicForDetails.websiteUrl && (
+                  <div className="flex flex-col gap-3">
+                    <span className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                      <span className="text-muted-foreground">🌐</span> Website
+                    </span>
+                    <div className="flex flex-wrap gap-2.5">
+                      <a href={selectedMechanicForDetails.websiteUrl.startsWith('http') ? selectedMechanicForDetails.websiteUrl : `https://${selectedMechanicForDetails.websiteUrl}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-xl bg-teal-500/10 px-4 py-2.5 text-sm font-bold text-teal-600 transition-all hover:bg-teal-500 hover:text-white shadow-sm hover:shadow-teal-500/25 active:scale-95" title="Website">
+                        <Globe size={16} /> Visit Website
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {selectedMechanicForDetails.verificationLevel > 0 && (
+            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 mt-4 shadow-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-xl">🛡️</span>
+                <h4 className="font-bold text-primary text-base">
+                  {selectedMechanicForDetails.verificationLevel === 6 ? '👑 Premium Partner' : '⭐ RoadResQ Verified'}
+                </h4>
+              </div>
+              <p className="text-sm text-primary/80 mb-3 font-medium">This mechanic has been verified for authenticity.</p>
+              
+              {selectedMechanicForDetails.verificationChecklist && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                  {(() => {
+                    const checklist = typeof selectedMechanicForDetails.verificationChecklist === 'string'
+                      ? JSON.parse(selectedMechanicForDetails.verificationChecklist || '{}')
+                      : selectedMechanicForDetails.verificationChecklist;
+                      
+                    const items = [
+                      { key: 'phone', label: 'Phone & Business' },
+                      { key: 'location', label: 'Location & GPS' },
+                      { key: 'shopPhotos', label: 'Shop Photos' },
+                      { key: 'identity', label: 'Owner Identity' },
+                      { key: 'services', label: 'Services & Prices' },
+                    ];
+                    
+                    return items.map(item => checklist[item.key] ? (
+                      <div key={item.key} className="flex items-center gap-2 text-xs text-primary bg-background/60 px-2 py-1.5 rounded-md border border-primary/10">
+                        <svg className="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                        <span className="font-semibold">{item.label}</span>
+                      </div>
+                    ) : null);
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedMechanicForDetails.mechanicType && (
+            <div>
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
+                <Wrench size={16} className="text-primary" /> Mechanic Type
+              </h4>
+              <span className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary">
+                {selectedMechanicForDetails.mechanicType}
+              </span>
+            </div>
+          )}
+
+          {selectedMechanicForDetails.description && (
+            <div>
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
+                <Info size={16} className="text-primary" /> Description
+              </h4>
+              <p className="rounded-xl border border-border/30 bg-secondary/20 p-4 text-sm leading-relaxed text-muted-foreground">
+                {selectedMechanicForDetails.description}
+              </p>
+            </div>
+          )}
+
+          {selectedMechanicForDetails.remarks && (selectedMechanicForDetails.status === 'Rejected' || selectedMechanicForDetails.status === 'Inactive') && (
+            <div>
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-destructive">
+                <Info size={16} /> Remarks ({selectedMechanicForDetails.status})
+              </h4>
+              <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm leading-relaxed text-destructive-foreground">
+                {selectedMechanicForDetails.remarks}
+              </p>
+            </div>
+          )}
+
+          <div>
+            <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
+              <MapPin size={16} className="text-primary" /> Location Details
+            </h4>
+            <div className="rounded-xl border border-border/30 bg-secondary/20 p-4 text-sm leading-relaxed text-muted-foreground flex flex-col gap-2">
+              {selectedMechanicForDetails.address && <p><strong>Address:</strong> {selectedMechanicForDetails.address}</p>}
+              {selectedMechanicForDetails.landmark && <p><strong>Landmark:</strong> {selectedMechanicForDetails.landmark}</p>}
+              {(selectedMechanicForDetails.city || selectedMechanicForDetails.state || selectedMechanicForDetails.pincode) && (
+                <p>
+                  <strong>Location:</strong> {[selectedMechanicForDetails.city, selectedMechanicForDetails.state, selectedMechanicForDetails.pincode].filter(Boolean).join(', ')}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {(() => {
+            const checklist = typeof selectedMechanicForDetails.verificationChecklist === 'string'
+              ? JSON.parse(selectedMechanicForDetails.verificationChecklist || '{}')
+              : (selectedMechanicForDetails.verificationChecklist || {});
+            
+            const priceEntries = Object.entries(checklist).filter(([k]) => k.startsWith('Price -'));
+            const additionalServices = checklist['Additional Service and Price'];
+            const notes = checklist['Notes'];
+            
+            if (selectedMechanicForDetails.verificationLevel > 0 && (priceEntries.length > 0 || additionalServices || notes)) {
+              return (
+                <div className="space-y-4">
+                  {(priceEntries.length > 0 || additionalServices) && (
+                    <div>
+                      <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
+                        <Wrench size={16} className="text-primary" /> Service Pricing & Details
+                      </h4>
+                      <div className="bg-secondary/10 border border-border/30 rounded-xl p-4 flex flex-col gap-3">
+                        {priceEntries.length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            {priceEntries.map(([key, val]: any) => (
+                              <div key={key} className="flex justify-between items-center bg-background/80 px-3 py-2 rounded-lg border border-border/50">
+                                <span className="text-sm font-semibold text-foreground">{key.replace(/^Price\s*-\s*/, '')}</span>
+                                <span className="text-sm font-bold text-primary">{val}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {additionalServices && (
+                          <div className={priceEntries.length > 0 ? "pt-3 border-t border-border/50" : ""}>
+                            <h5 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Additional Services</h5>
+                            <div className="flex flex-col gap-2">
+                              {String(additionalServices).split(/[,\n]/).map(s => s.trim()).filter(Boolean).map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center bg-background/80 px-3 py-2 rounded-lg border border-border/50">
+                                  <span className="text-sm font-semibold text-foreground">{item.split('-')[0]?.trim() || item}</span>
+                                  {item.includes('-') && <span className="text-sm font-bold text-primary">{item.split('-').slice(1).join('-').trim()}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {notes && (
+                    <div>
+                      <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
+                        <Info size={16} className="text-blue-500" /> Additional Notes
+                      </h4>
+                      <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-xl p-4 text-sm leading-relaxed text-blue-800 dark:text-blue-300">
+                        {String(notes)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          {(selectedMechanicForDetails.evSupport || selectedMechanicForDetails.is24Hours || selectedMechanicForDetails.homeService || selectedMechanicForDetails.roadsideAssistance || selectedMechanicForDetails.holidayWorking) && (
+            <div>
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
+                <Star size={16} className="text-primary" /> Special Features
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {selectedMechanicForDetails.is24Hours && <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-600">24/7 Available</span>}
+                {selectedMechanicForDetails.evSupport && <span className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-600">EV Support</span>}
+                {selectedMechanicForDetails.homeService && <span className="rounded-lg border border-orange-500/20 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-600">Home Service</span>}
+                {selectedMechanicForDetails.roadsideAssistance && <span className="rounded-lg border border-purple-500/20 bg-purple-500/10 px-3 py-1.5 text-xs font-bold text-purple-600">Roadside Assistance</span>}
+                {selectedMechanicForDetails.holidayWorking && <span className="rounded-lg border border-pink-500/20 bg-pink-500/10 px-3 py-1.5 text-xs font-bold text-pink-600">Open on Holidays</span>}
+              </div>
+            </div>
+          )}
+
+          
+          {selectedMechanicForDetails.vehicleTypes && selectedMechanicForDetails.vehicleTypes.length > 0 && (
+            <div>
+              <h4 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2"><Navigation size={16} className="text-primary"/> Supported Vehicles</h4>
+              <div className="flex flex-wrap gap-2">
+                {selectedMechanicForDetails.vehicleTypes.map((v: string) => (
+                  <span key={v} className="bg-primary/10 text-primary border border-primary/20 px-3 py-1.5 rounded-lg text-xs font-bold">{v}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedMechanicForDetails.serviceTypes && selectedMechanicForDetails.serviceTypes.length > 0 && (
+            <div>
+              <h4 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2"><Wrench size={16} className="text-primary"/> Services Offered</h4>
+              <div className="flex flex-wrap gap-2">
+                {selectedMechanicForDetails.serviceTypes.map((s: string) => (
+                  <span key={s} className="bg-secondary/80 border border-border px-3 py-1.5 rounded-lg text-xs font-medium text-foreground">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+
+
+          <MechanicReviews mechanicId={selectedMechanicForDetails.id} />
+        </div>
+        
+        <div className="shrink-0 p-4 border-t border-border/50 bg-muted/10 flex gap-2">
+           <button onClick={onClose} className="flex-1 bg-secondary/80 hover:bg-secondary text-foreground h-12 rounded-xl flex justify-center items-center active:scale-95 transition-all font-bold text-sm gap-2 border border-border/50">
+             <X size={18} /> Close
+           </button>
+           <button 
+             onClick={() => {
+               const { latitude, longitude } = selectedMechanicForDetails;
+               window.open(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`, '_blank', 'noopener,noreferrer');
+             }} 
+             className="flex-[1.5] bg-primary text-primary-foreground h-12 rounded-xl flex justify-center items-center hover:bg-primary/90 active:scale-95 transition-all shadow-md shadow-primary/20 font-bold text-sm gap-2"
+           >
+             <Navigation size={18} /> Navigate
+           </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,144 @@
+import React from 'react';
+import { Eye, MapPin, Phone, MessageCircle, Navigation, Wrench, Siren } from 'lucide-react';
+import { getMechanicStatus, getEstimatedTimeFromDistance } from '../../utils/mechanicUtils';
+import { LazyImage } from '../shared/LazyImage';
+
+interface MechanicListCardProps {
+  mechanic: any;
+  onOpenDetails: (mechanic: any) => void;
+  onNavigate: (id: number) => void;
+  onRequestHelp: (mechanic: any) => void;
+}
+
+export function MechanicListCard({ mechanic, onOpenDetails, onNavigate, onRequestHelp }: MechanicListCardProps) {
+  const status = getMechanicStatus(mechanic);
+
+  return (
+    <div className="group flex cursor-pointer flex-col gap-4 rounded-[24px] border border-border/60 bg-card p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 active:scale-[0.99] sm:p-5">
+      <div className="flex gap-4">
+        {mechanic.image ? (
+          <div
+            className="group/img relative h-24 w-24 shrink-0 cursor-pointer overflow-hidden rounded-2xl shadow-sm transition-shadow hover:shadow-md sm:h-28 sm:w-28"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDetails(mechanic);
+            }}
+          >
+            <LazyImage 
+              src={mechanic.image || mechanic.imageUrl} 
+              alt={mechanic.businessName || mechanic.name} 
+              imgClassName="bg-secondary group-hover/img:scale-110" 
+            />
+            {mechanic.verificationLevel > 0 && (
+              <div className="absolute top-0 left-0 bg-blue-600 text-white rounded-br-lg p-0.5 shadow-md flex items-center justify-center z-10" title={`Verified Level ${mechanic.verificationLevel}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
+            )}
+            {(mechanic.rating || mechanic.rating > 0) ? (
+              <div className="absolute bottom-0 right-0 bg-black/80 backdrop-blur-sm text-white rounded-tl-xl px-2 py-1 shadow-md flex items-center gap-1 z-10">
+                <span className="text-xs font-bold leading-none">{mechanic.rating}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              </div>
+            ) : null}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 backdrop-blur-[2px] transition-opacity duration-300 group-hover/img:opacity-100 z-20">
+              <Eye className="h-8 w-8 text-white drop-shadow-md" />
+            </div>
+          </div>
+        ) : (
+          <div
+            className="group/img relative flex h-24 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-secondary/50 shadow-sm transition-colors duration-300 hover:shadow-md group-hover:bg-primary/5 sm:h-28 sm:w-28"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDetails(mechanic);
+            }}
+          >
+            <Wrench className="h-8 w-8 text-muted-foreground/30" />
+            {mechanic.verificationLevel > 0 && (
+              <div className="absolute top-0 left-0 bg-blue-600 text-white rounded-br-lg p-0.5 shadow-md flex items-center justify-center z-10" title={`Verified Level ${mechanic.verificationLevel}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
+            )}
+            {(mechanic.rating || mechanic.rating > 0) ? (
+              <div className="absolute bottom-0 right-0 bg-black/80 backdrop-blur-sm text-white rounded-tl-xl px-2 py-1 shadow-md flex items-center gap-1 z-10">
+                <span className="text-xs font-bold leading-none">{mechanic.rating}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              </div>
+            ) : null}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 backdrop-blur-[2px] transition-opacity duration-300 group-hover/img:opacity-100 z-20">
+              <Eye className="h-8 w-8 text-white drop-shadow-md" />
+            </div>
+          </div>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
+          <div>
+            <div className="mb-1.5 flex items-start justify-between gap-2">
+              <div className="flex flex-col min-w-0">
+                <h4 className="truncate text-lg font-bold leading-tight text-foreground transition-colors group-hover:text-primary">
+                  {mechanic.businessName || mechanic.name}
+                </h4>
+                {mechanic.isTrustedPartner && (
+                  <span className="mt-1 inline-flex w-fit rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                    Trusted {mechanic.partnerTier || 'Partner'}
+                  </span>
+                )}
+              </div>
+            </div>
+            <p className="flex items-center gap-1.5 truncate text-[13px] font-medium text-muted-foreground">
+              <MapPin size={14} className="shrink-0 text-primary/70" />
+              <span className="truncate">{[mechanic.landmark, mechanic.area].filter(Boolean).join(', ')}</span>
+            </p>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+              status === 'Available'
+                ? 'border-green-500/20 bg-green-500/10 text-green-600'
+                : 'border-red-500/20 bg-red-500/10 text-red-600'
+            }`}>
+              {status}
+            </span>
+            {mechanic.dist !== null && mechanic.dist !== undefined && (
+              <span className="shrink-0 rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary tracking-wide uppercase">
+                {mechanic.dist.toFixed(1)} km • {getEstimatedTimeFromDistance(mechanic.dist)}
+              </span>
+            )}
+            {mechanic.is24Hours && <span className="rounded border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-600">24/7</span>}
+            {mechanic.evSupport && <span className="rounded border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">EV Ready</span>}
+            {mechanic.priorityDispatchEligible && <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">Priority Ready</span>}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-2.5 border-t border-border/40 pt-3">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRequestHelp(mechanic);
+          }}
+          className="flex h-11 flex-[1.2] items-center justify-center gap-2 rounded-xl border border-primary/20 bg-primary/10 text-[13px] font-bold text-primary transition-all hover:bg-primary hover:text-primary-foreground active:scale-95"
+        >
+          <Siren size={16} /> <span>Request Help</span>
+        </button>
+        {mechanic.phone?.[0] && (
+          <a href={`tel:${mechanic.phone[0].number}`} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-border/50 bg-secondary/80 text-[13px] font-bold text-foreground transition-all hover:bg-primary hover:text-primary-foreground active:scale-95">
+            <Phone size={16} /> <span className="hidden sm:inline">Call</span>
+          </a>
+        )}
+        {mechanic.phone?.[0]?.isWhatsapp && (
+          <a href={`https://wa.me/91${mechanic.phone[0].number}`} target="_blank" rel="noopener noreferrer" className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-border/50 bg-secondary/80 text-[13px] font-bold text-foreground transition-all hover:bg-green-600 hover:text-white active:scale-95">
+            <MessageCircle size={16} /> <span className="hidden sm:inline">WhatsApp</span>
+          </a>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onNavigate(mechanic.id);
+          }}
+          className="flex h-11 flex-[1.2] items-center justify-center gap-2 rounded-xl bg-primary text-[13px] font-bold text-primary-foreground shadow-md shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95"
+        >
+          <Navigation size={16} /> <span>Navigate</span>
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,35 @@
+import { apiClient } from './apiClient';
+import type { Mechanic, UpdateRequest } from '../types';
+
+export const getMechanics = () => apiClient<Mechanic[]>('/admin/mechanics');
+export const getMechanicById = (id: number) => apiClient<Mechanic>(`/admin/mechanics/${id}`);
+export const createMechanic = (data: any) => apiClient<Mechanic>('/admin/mechanics', { method: 'POST', data });
+export const updateMechanic = (id: number, data: any) => apiClient<{ message: string }>((`/admin/mechanics/${id}`), { method: 'PUT', data });
+export const bulkUpdateMechanicsStatus = (ids: number[], status: string, remarks?: string) => apiClient<{ message: string }>('/admin/mechanics/bulk/status', { method: 'PUT', data: { ids, status, remarks } });
+export const deleteMechanic = (id: number) => apiClient<{ message: string }>((`/admin/mechanics/${id}`), { method: 'DELETE' });
+export const approveMechanic = (id: number) => apiClient<{ message: string }>((`/admin/mechanics/${id}/approve`), { method: 'POST' });
+export const updateVerification = (id: number, level: number, checklist: any) => apiClient<{ message: string, mechanic: Mechanic }>(`/admin/mechanics/${id}/verification`, { method: 'PUT', data: { verificationLevel: level, verificationChecklist: checklist } });
+export const updateMechanicTrustStatus = (id: number, data: {
+  isTrustedPartner: boolean;
+  partnerTier?: string;
+  trustScore?: number;
+  priorityDispatchEligible?: boolean;
+  reason?: string;
+}) => apiClient<{ message: string; mechanic: Mechanic }>(`/admin/mechanics/${id}/trust-status`, { method: 'PUT', data });
+
+
+export const getVerificationRequests = () => apiClient<any[]>('/admin/verifications');
+export const approveVerificationRequest = (id: number) => apiClient<{ message: string }>((`/admin/verifications/${id}/approve`), { method: 'POST' });
+export const rejectVerificationRequest = (id: number, remarks?: string) => apiClient<{ message: string }>((`/admin/verifications/${id}/reject`), { method: 'POST', data: { remarks } });
+export const deleteVerificationRequest = (id: number) => apiClient<{ message: string }>((`/admin/verifications/${id}`), { method: 'DELETE' });
+
+export const getUpdateRequests = () => apiClient<UpdateRequest[]>('/admin/update-requests');
+export const getUpdateRequestById = (id: number) => apiClient<UpdateRequest>(`/admin/update-requests/${id}`);
+export const updateUpdateRequest = (id: number, data: any) => apiClient<{ message: string }>(`/admin/update-requests/${id}`, { method: 'PUT', data });
+export const deleteUpdateRequest = (id: number) => apiClient<{ message: string }>((`/admin/update-requests/${id}`), { method: 'DELETE' });
+export const approveUpdateRequest = (id: number) => apiClient<{ message: string }>((`/admin/update-requests/${id}/approve`), { method: 'POST' });
+export const rejectUpdateRequest = (id: number, remarks?: string) => apiClient<{ message: string }>((`/admin/update-requests/${id}/reject`), { method: 'POST', data: { remarks } });
+
+// Public mechanics API
+export const getPublicMechanics = (searchParams: URLSearchParams) => apiClient<Mechanic[]>(`/public/mechanics?${searchParams.toString()}`);
+export const submitMechanicRegistration = (data: any) => apiClient<{ message: string }>('/public/mechanics/register', { method: 'POST', data });
