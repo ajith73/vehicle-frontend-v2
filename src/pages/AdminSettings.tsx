@@ -1,10 +1,21 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../api/apiClient';
-import { Trash2, Plus, Settings, Edit2, X, Check, Save } from 'lucide-react';
+import { Settings, Edit2, Save } from 'lucide-react';
 import Select from 'react-select';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { SubscriptionPlan } from '../types';
+import { EditableNameListSection } from '../components/admin/settings/EditableNameListSection';
+import {
+  adminSettingsTabs,
+  createEmptyPlanForm,
+  getErrorMessage,
+  mapPlanToForm,
+  selectThemeStyles,
+  toFeatureOptions,
+  toSelectOptions,
+  type AdminSettingsTab
+} from './admin/adminSettingsHelpers';
 
 export default function AdminSettings() {
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -12,7 +23,7 @@ export default function AdminSettings() {
   const [specificServices, setSpecificServices] = useState<any[]>([]);
   const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'types' | 'specific' | 'membership'>('types');
+  const [activeTab, setActiveTab] = useState<AdminSettingsTab>('types');
 
   const [featuredVehicles, setFeaturedVehicles] = useState<any[]>([]);
   const [featuredServices, setFeaturedServices] = useState<any[]>([]);
@@ -35,23 +46,7 @@ export default function AdminSettings() {
   const [confirmConfig, setConfirmConfig] = useState<{isOpen: boolean, title: string, message: string, type: 'danger'|'warning'|'info'|'success', onConfirm: () => void} | null>(null);
   const [planSaving, setPlanSaving] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
-  const [planForm, setPlanForm] = useState({
-    name: '',
-    tier: '',
-    description: '',
-    priceAmount: '0',
-    billingCycle: 'MONTHLY',
-    platformFeeDiscountPercent: '0',
-    prioritySupport: false,
-    priorityDispatch: false,
-    trustedOnlyAccess: false,
-    isActive: true,
-  });
-
-  const getErrorMessage = (err: unknown, fallback: string) => {
-    if (err instanceof Error && err.message) return err.message;
-    return fallback;
-  };
+  const [planForm, setPlanForm] = useState(createEmptyPlanForm);
 
   const fetchData = async () => {
     try {
@@ -67,22 +62,9 @@ export default function AdminSettings() {
       setSpecificServices(ssData);
       setSubscriptionPlans(planData);
       
-      // Initialize featured selections
-      setFeaturedVehicles(
-        vData.filter((v: any) => v.isFeatured)
-             .sort((a: any, b: any) => a.orderIndex - b.orderIndex)
-             .map((v: any) => ({ value: v.id, label: v.name }))
-      );
-      setFeaturedServices(
-        sData.filter((s: any) => s.isFeatured)
-             .sort((a: any, b: any) => a.orderIndex - b.orderIndex)
-             .map((s: any) => ({ value: s.id, label: s.name }))
-      );
-      setFeaturedSpecificServices(
-        ssData.filter((s: any) => s.isFeatured)
-             .sort((a: any, b: any) => a.orderIndex - b.orderIndex)
-             .map((s: any) => ({ value: s.id, label: s.name }))
-      );
+      setFeaturedVehicles(toFeatureOptions(vData));
+      setFeaturedServices(toFeatureOptions(sData));
+      setFeaturedSpecificServices(toFeatureOptions(ssData));
     } catch (err) {
       toast.error('Failed to load settings data');
     } finally {
@@ -92,34 +74,12 @@ export default function AdminSettings() {
 
   const resetPlanForm = () => {
     setEditingPlanId(null);
-    setPlanForm({
-      name: '',
-      tier: '',
-      description: '',
-      priceAmount: '0',
-      billingCycle: 'MONTHLY',
-      platformFeeDiscountPercent: '0',
-      prioritySupport: false,
-      priorityDispatch: false,
-      trustedOnlyAccess: false,
-      isActive: true,
-    });
+    setPlanForm(createEmptyPlanForm());
   };
 
   const fillPlanForm = (plan: SubscriptionPlan) => {
     setEditingPlanId(plan.id);
-    setPlanForm({
-      name: plan.name,
-      tier: plan.tier,
-      description: plan.description || '',
-      priceAmount: String(plan.priceAmount ?? 0),
-      billingCycle: plan.billingCycle || 'MONTHLY',
-      platformFeeDiscountPercent: String(plan.platformFeeDiscountPercent ?? 0),
-      prioritySupport: Boolean(plan.prioritySupport),
-      priorityDispatch: Boolean(plan.priorityDispatch),
-      trustedOnlyAccess: Boolean(plan.trustedOnlyAccess),
-      isActive: Boolean(plan.isActive),
-    });
+    setPlanForm(mapPlanToForm(plan));
   };
 
   const handlePlanFieldChange = (field: keyof typeof planForm, value: string | boolean) => {
@@ -391,24 +351,15 @@ export default function AdminSettings() {
       </div>
 
       <div className="flex border-b border-border mb-6">
-        <button
-          className={`px-4 py-2 font-medium text-sm transition-colors ${activeTab === 'types' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          onClick={() => setActiveTab('types')}
-        >
-          Vehicle & Service Types
-        </button>
-        <button
-          className={`px-4 py-2 font-medium text-sm transition-colors ${activeTab === 'specific' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          onClick={() => setActiveTab('specific')}
-        >
-          Specific Services
-        </button>
-        <button
-          className={`px-4 py-2 font-medium text-sm transition-colors ${activeTab === 'membership' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          onClick={() => setActiveTab('membership')}
-        >
-          Membership Plans
-        </button>
+        {adminSettingsTabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={`px-4 py-2 font-medium text-sm transition-colors ${activeTab === tab.id ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {activeTab === 'types' && (
@@ -435,244 +386,87 @@ export default function AdminSettings() {
             <label className="block text-sm font-bold mb-2 text-foreground">Featured Vehicle Types</label>
             <Select
               isMulti
-              options={vehicles.map(v => ({ value: v.id, label: v.name }))}
+              options={toSelectOptions(vehicles)}
               value={featuredVehicles}
               onChange={(selected) => setFeaturedVehicles(selected as any)}
               className="text-foreground"
               classNamePrefix="select"
               placeholder="Select and order vehicles..."
-              styles={{
-                control: (base) => ({ ...base, backgroundColor: 'transparent', borderColor: 'hsl(var(--border))' }),
-                menu: (base) => ({ ...base, backgroundColor: 'hsl(var(--card))' }),
-                option: (base, state) => ({ ...base, backgroundColor: state.isFocused ? 'hsl(var(--secondary))' : 'hsl(var(--background))', color: 'hsl(var(--foreground))' }),
-                multiValue: (base) => ({ ...base, backgroundColor: 'hsl(var(--primary))', opacity: 0.9 }),
-                multiValueLabel: (base) => ({ ...base, color: 'hsl(var(--primary-foreground))' }),
-                multiValueRemove: (base) => ({ ...base, color: 'hsl(var(--primary-foreground))', ':hover': { backgroundColor: 'rgba(0,0,0,0.2)', color: 'white' } }),
-                input: (base) => ({ ...base, color: 'hsl(var(--foreground))' })
-              }}
+              styles={selectThemeStyles}
             />
           </div>
           <div>
             <label className="block text-sm font-bold mb-2 text-foreground">Featured Service Types</label>
             <Select
               isMulti
-              options={services.map(s => ({ value: s.id, label: s.name }))}
+              options={toSelectOptions(services)}
               value={featuredServices}
               onChange={(selected) => setFeaturedServices(selected as any)}
               className="text-foreground"
               classNamePrefix="select"
               placeholder="Select and order services..."
-              styles={{
-                control: (base) => ({ ...base, backgroundColor: 'transparent', borderColor: 'hsl(var(--border))' }),
-                menu: (base) => ({ ...base, backgroundColor: 'hsl(var(--card))' }),
-                option: (base, state) => ({ ...base, backgroundColor: state.isFocused ? 'hsl(var(--secondary))' : 'hsl(var(--background))', color: 'hsl(var(--foreground))' }),
-                multiValue: (base) => ({ ...base, backgroundColor: 'hsl(var(--primary))', opacity: 0.9 }),
-                multiValueLabel: (base) => ({ ...base, color: 'hsl(var(--primary-foreground))' }),
-                multiValueRemove: (base) => ({ ...base, color: 'hsl(var(--primary-foreground))', ':hover': { backgroundColor: 'rgba(0,0,0,0.2)', color: 'white' } }),
-                input: (base) => ({ ...base, color: 'hsl(var(--foreground))' })
-              }}
+              styles={selectThemeStyles}
             />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Vehicles Section */}
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Vehicle Types</h2>
-          
-          <form onSubmit={handleAddVehicle} className="flex gap-2 mb-6">
-            <input
-              type="text"
-              placeholder="E.g. Hovercraft"
-              value={newVehicle}
-              onChange={(e) => setNewVehicle(e.target.value)}
-              className="flex-1 bg-background border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
-            <button
-              type="submit"
-              disabled={!newVehicle.trim()}
-              className="bg-primary text-primary-foreground p-2 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </form>
+        <EditableNameListSection
+          title="Vehicle Types"
+          placeholder="E.g. Hovercraft"
+          emptyLabel="No vehicles found"
+          items={vehicles}
+          newValue={newVehicle}
+          editingId={editingVehicleId}
+          editingName={editingVehicleName}
+          onNewValueChange={setNewVehicle}
+          onEditingNameChange={setEditingVehicleName}
+          onAdd={handleAddVehicle}
+          onEditStart={(item) => { setEditingVehicleId(item.id); setEditingVehicleName(item.name); }}
+          onEditCancel={() => setEditingVehicleId(null)}
+          onUpdate={handleUpdateVehicle}
+          onDelete={handleDeleteVehicle}
+        />
 
-          <div className="bg-background border border-border rounded-lg max-h-[400px] overflow-y-auto">
-            {vehicles.map((v) => (
-              <div key={v.id} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-secondary/20 transition-colors">
-                {editingVehicleId === v.id ? (
-                  <div className="flex flex-1 items-center gap-2 mr-4">
-                    <input
-                      type="text"
-                      value={editingVehicleName}
-                      onChange={(e) => setEditingVehicleName(e.target.value)}
-                      className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                      autoFocus
-                      onKeyDown={(e) => e.key === 'Enter' && handleUpdateVehicle(v.id)}
-                    />
-                    <button onClick={() => handleUpdateVehicle(v.id)} className="text-green-600 hover:bg-green-100 p-1 rounded-md transition-colors"><Check className="w-4 h-4" /></button>
-                    <button onClick={() => setEditingVehicleId(null)} className="text-muted-foreground hover:bg-secondary p-1 rounded-md transition-colors"><X className="w-4 h-4" /></button>
-                  </div>
-                ) : (
-                  <>
-                    <span className="font-medium text-sm flex-1">{v.name}</span>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => { setEditingVehicleId(v.id); setEditingVehicleName(v.name); }}
-                        className="text-primary/80 hover:text-primary p-1 rounded-md hover:bg-primary/10 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteVehicle(v.id)}
-                        className="text-destructive/80 hover:text-destructive p-1 rounded-md hover:bg-destructive/10 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-            {vehicles.length === 0 && (
-              <div className="p-4 text-center text-muted-foreground text-sm">No vehicles found</div>
-            )}
-          </div>
-        </div>
-
-        {/* Services Section */}
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Service Types</h2>
-          
-          <form onSubmit={handleAddService} className="flex gap-2 mb-6">
-            <input
-              type="text"
-              placeholder="E.g. Turbo Replacement"
-              value={newService}
-              onChange={(e) => setNewService(e.target.value)}
-              className="flex-1 bg-background border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
-            <button
-              type="submit"
-              disabled={!newService.trim()}
-              className="bg-primary text-primary-foreground p-2 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </form>
-
-          <div className="bg-background border border-border rounded-lg max-h-[400px] overflow-y-auto">
-            {services.map((s) => (
-              <div key={s.id} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-secondary/20 transition-colors">
-                {editingServiceId === s.id ? (
-                  <div className="flex flex-1 items-center gap-2 mr-4">
-                    <input
-                      type="text"
-                      value={editingServiceName}
-                      onChange={(e) => setEditingServiceName(e.target.value)}
-                      className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                      autoFocus
-                      onKeyDown={(e) => e.key === 'Enter' && handleUpdateService(s.id)}
-                    />
-                    <button onClick={() => handleUpdateService(s.id)} className="text-green-600 hover:bg-green-100 p-1 rounded-md transition-colors"><Check className="w-4 h-4" /></button>
-                    <button onClick={() => setEditingServiceId(null)} className="text-muted-foreground hover:bg-secondary p-1 rounded-md transition-colors"><X className="w-4 h-4" /></button>
-                  </div>
-                ) : (
-                  <>
-                    <span className="font-medium text-sm flex-1">{s.name}</span>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => { setEditingServiceId(s.id); setEditingServiceName(s.name); }}
-                        className="text-primary/80 hover:text-primary p-1 rounded-md hover:bg-primary/10 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteService(s.id)}
-                        className="text-destructive/80 hover:text-destructive p-1 rounded-md hover:bg-destructive/10 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-            {services.length === 0 && (
-              <div className="p-4 text-center text-muted-foreground text-sm">No services found</div>
-            )}
-          </div>
-        </div>
+        <EditableNameListSection
+          title="Service Types"
+          placeholder="E.g. Turbo Replacement"
+          emptyLabel="No services found"
+          items={services}
+          newValue={newService}
+          editingId={editingServiceId}
+          editingName={editingServiceName}
+          onNewValueChange={setNewService}
+          onEditingNameChange={setEditingServiceName}
+          onAdd={handleAddService}
+          onEditStart={(item) => { setEditingServiceId(item.id); setEditingServiceName(item.name); }}
+          onEditCancel={() => setEditingServiceId(null)}
+          onUpdate={handleUpdateService}
+          onDelete={handleDeleteService}
+        />
       </div>
         </>
       )}
 
       {activeTab === 'specific' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
-          {/* Specific Services Section */}
-          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4">Specific Services (e.g. Bike Puncture)</h2>
-            
-            <form onSubmit={handleAddSpecificService} className="flex gap-2 mb-6">
-              <input
-                type="text"
-                placeholder="E.g. Bike Puncture"
-                value={newSpecificService}
-                onChange={(e) => setNewSpecificService(e.target.value)}
-                className="flex-1 bg-background border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-              <button
-                type="submit"
-                disabled={!newSpecificService.trim()}
-                className="bg-primary text-primary-foreground p-2 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
-            </form>
-
-            <div className="bg-background border border-border rounded-lg max-h-[600px] overflow-y-auto">
-              {specificServices.map((s) => (
-                <div key={s.id} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-secondary/20 transition-colors">
-                  {editingSpecificServiceId === s.id ? (
-                    <div className="flex flex-1 items-center gap-2 mr-4">
-                      <input
-                        type="text"
-                        value={editingSpecificServiceName}
-                        onChange={(e) => setEditingSpecificServiceName(e.target.value)}
-                        className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                        autoFocus
-                        onKeyDown={(e) => e.key === 'Enter' && handleUpdateSpecificService(s.id)}
-                      />
-                      <button onClick={() => handleUpdateSpecificService(s.id)} className="text-green-600 hover:bg-green-100 p-1 rounded-md transition-colors"><Check className="w-4 h-4" /></button>
-                      <button onClick={() => setEditingSpecificServiceId(null)} className="text-muted-foreground hover:bg-secondary p-1 rounded-md transition-colors"><X className="w-4 h-4" /></button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="font-medium text-sm flex-1">{s.name}</span>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => { setEditingSpecificServiceId(s.id); setEditingSpecificServiceName(s.name); }}
-                          className="text-primary/80 hover:text-primary p-1 rounded-md hover:bg-primary/10 transition-colors"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSpecificService(s.id)}
-                          className="text-destructive/80 hover:text-destructive p-1 rounded-md hover:bg-destructive/10 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-              {specificServices.length === 0 && (
-                <div className="p-4 text-center text-muted-foreground text-sm">No specific services found</div>
-              )}
-            </div>
-          </div>
+          <EditableNameListSection
+            title="Specific Services (e.g. Bike Puncture)"
+            placeholder="E.g. Bike Puncture"
+            emptyLabel="No specific services found"
+            items={specificServices}
+            newValue={newSpecificService}
+            editingId={editingSpecificServiceId}
+            editingName={editingSpecificServiceName}
+            onNewValueChange={setNewSpecificService}
+            onEditingNameChange={setEditingSpecificServiceName}
+            onAdd={handleAddSpecificService}
+            onEditStart={(item) => { setEditingSpecificServiceId(item.id); setEditingSpecificServiceName(item.name); }}
+            onEditCancel={() => setEditingSpecificServiceId(null)}
+            onUpdate={handleUpdateSpecificService}
+            onDelete={handleDeleteSpecificService}
+          />
         </div>
       )}
 

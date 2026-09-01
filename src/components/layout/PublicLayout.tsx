@@ -18,8 +18,8 @@ export default function PublicLayout() {
     { label: 'For Partners', href: '/for-partners' },
     { label: 'About Us', href: '/about' },
     { label: 'Feedback', href: '/feedback' },
-    { label: 'Donate', href: '/donate' },
     { label: 'Contact', href: '/contact' },
+    { label: 'Donate', href: '/donate' },
   ];
 
   return (

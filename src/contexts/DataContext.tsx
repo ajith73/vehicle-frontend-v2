@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { apiClient } from '../api/apiClient';
+import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { apiClient, AUTH_STATE_CHANGED_EVENT } from '../api/apiClient';
 
 interface DataContextType {
   vehicles: any[];
   services: any[];
   isLoadingData: boolean;
+  isLoadingCustomerProfile: boolean;
   refreshData: () => Promise<void>;
   cachedMechanics: any[] | null;
   cachedMechanicsTotalCount: number;
@@ -37,13 +38,19 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [cachedLandingMechanicsParams, setCachedLandingMechanicsParams] = useState<string | null>(null);
 
   const [customerProfile, setCustomerProfile] = useState<any | null>(null);
+  const [isLoadingCustomerProfile, setIsLoadingCustomerProfile] = useState(true);
 
-  const refreshCustomerProfile = async () => {
+  const hasCustomerSession = () => {
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
+    return Boolean(token) && role === 'Customer';
+  };
 
-    if (!token || role !== 'Customer') {
+  const refreshCustomerProfile = useCallback(async () => {
+    setIsLoadingCustomerProfile(true);
+    if (!hasCustomerSession()) {
       setCustomerProfile(null);
+      setIsLoadingCustomerProfile(false);
       return;
     }
 
@@ -57,8 +64,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     } catch (err) {
       console.error('Failed to fetch customer profile', err);
       setCustomerProfile(null);
+    } finally {
+      setIsLoadingCustomerProfile(false);
     }
-  };
+  }, []);
 
   const setCachedMechanicsData = (data: any[], totalCount: number, params: string) => {
     setCachedMechanics(data);
@@ -76,7 +85,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setCachedLandingMechanicsParams(params);
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoadingData(true);
     try {
       const [vData, sData] = await Promise.all([
@@ -90,18 +99,49 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoadingData(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData();
-    refreshCustomerProfile();
-  }, []);
+    void fetchData();
+    void refreshCustomerProfile();
+  }, [fetchData, refreshCustomerProfile]);
+
+  useEffect(() => {
+    const handleAuthStateChanged = () => {
+      void refreshCustomerProfile();
+    };
+
+    const handleWindowFocus = () => {
+      if (hasCustomerSession()) {
+        void refreshCustomerProfile();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && hasCustomerSession()) {
+        void refreshCustomerProfile();
+      }
+    };
+
+    window.addEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthStateChanged as EventListener);
+    window.addEventListener('storage', handleAuthStateChanged);
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthStateChanged as EventListener);
+      window.removeEventListener('storage', handleAuthStateChanged);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshCustomerProfile]);
 
   return (
     <DataContext.Provider value={{ 
       vehicles, 
       services, 
       isLoadingData, 
+      isLoadingCustomerProfile,
       refreshData: fetchData,
       cachedMechanics,
       cachedMechanicsTotalCount,

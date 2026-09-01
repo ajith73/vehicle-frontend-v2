@@ -3,6 +3,7 @@ import { Phone, Navigation } from 'lucide-react';
 import { getDistanceFromLatLonInKm, getEstimatedTimeFromDistance } from '../../utils/mechanicUtils';
 import toast from 'react-hot-toast';
 import { LazyImage } from '../shared/LazyImage';
+import { getPrimaryPhoneNumber } from '../../utils/phone';
 
 interface MechanicCardProps {
   mechanic: any;
@@ -11,6 +12,7 @@ interface MechanicCardProps {
 }
 
 export function MechanicCard({ mechanic, userLocation, navigateToMechanic }: MechanicCardProps) {
+  const primaryPhone = getPrimaryPhoneNumber(mechanic.phone);
   const distance = userLocation
     ? getDistanceFromLatLonInKm(userLocation[0], userLocation[1], parseFloat(mechanic.latitude), parseFloat(mechanic.longitude)).toFixed(1)
     : '?';
@@ -59,10 +61,10 @@ export function MechanicCard({ mechanic, userLocation, navigateToMechanic }: Mec
       </div>
       <div className="mt-4 flex gap-2">
         <a
-          href={mechanic.phone ? `tel:${mechanic.phone}` : '#'}
+          href={primaryPhone ? `tel:${primaryPhone}` : '#'}
           onClick={(e) => {
             e.stopPropagation();
-            if (!mechanic.phone) {
+            if (!primaryPhone) {
               e.preventDefault();
               toast.error('Phone number not available');
             }

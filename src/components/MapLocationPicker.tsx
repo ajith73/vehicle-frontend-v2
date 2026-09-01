@@ -41,8 +41,7 @@ const MapCenterer = ({ coords }: { coords: [number, number] }) => {
 };
 
 export function MapLocationPicker({ initialLocation, onSelect, onClose }: MapLocationPickerProps) {
-  // Default to London or somewhere generic if no initial location
-  const [coords, setCoords] = useState<[number, number]>(initialLocation || [51.505, -0.09]);
+  const [coords, setCoords] = useState<[number, number]>(initialLocation || [11.0168, 76.9558]);
   const [addressName, setAddressName] = useState<string>('Selected Location');
   const [isGeocoding, setIsGeocoding] = useState(false);
   
@@ -202,7 +201,7 @@ export function MapLocationPicker({ initialLocation, onSelect, onClose }: MapLoc
             </div>
             <div className="flex flex-col min-w-0">
               <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Selected Location</span>
-              <span className="font-bold text-sm truncate max-w-[200px]">
+              <span className="font-bold text-sm break-words sm:max-w-[260px]">
                 {isGeocoding ? 'Locating...' : addressName}
               </span>
             </div>

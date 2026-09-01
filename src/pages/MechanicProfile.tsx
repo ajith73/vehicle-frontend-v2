@@ -6,6 +6,7 @@ import type { Mechanic } from '../types';
 import { MapPin, Wrench, Navigation, Phone } from 'lucide-react';
 import { MechanicReviews } from '../components/shared/MechanicReviews';
 import { LazyImage } from '../components/shared/LazyImage';
+import { formatPhoneDisplay } from '../utils/phone';
 
 export default function MechanicProfile() {
   const { id } = useParams<{ id: string }>();
@@ -160,7 +161,7 @@ export default function MechanicProfile() {
                   {mechanic.phone ? (
                     <div className="bg-secondary/30 rounded-xl p-4 border border-border">
                       <p className="font-medium text-lg">
-                        {Array.isArray(mechanic.phone) ? mechanic.phone.join(', ') : mechanic.phone}
+                        {formatPhoneDisplay(mechanic.phone)}
                       </p>
                       {mechanic.alternatePhone && (
                         <p className="text-muted-foreground mt-1">{mechanic.alternatePhone}</p>

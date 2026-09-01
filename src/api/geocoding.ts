@@ -13,6 +13,7 @@ interface NominatimSearchResult {
 }
 
 interface NominatimReverseResult {
+  display_name?: string;
   address?: {
     city?: string;
     town?: string;
@@ -59,6 +60,11 @@ export async function reverseGeocodeName(coords: [number, number]): Promise<stri
     },
     headers: NOMINATIM_HEADERS
   });
+
+  const fullAddress = String(response.data?.display_name || '').trim();
+  if (fullAddress) {
+    return fullAddress;
+  }
 
   const address = response.data?.address;
   return address?.city

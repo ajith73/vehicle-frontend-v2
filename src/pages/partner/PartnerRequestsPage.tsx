@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Navigation, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { MapPin, Clock, Navigation, CheckCircle2, XCircle, Loader2, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { openRealtimeStream } from '../../api/realtime';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +14,9 @@ export default function PartnerRequestsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('AVAILABLE');
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [connectionLost, setConnectionLost] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
   useEffect(() => {
     let closed = false;
@@ -23,10 +26,13 @@ export default function PartnerRequestsPage() {
       onMessage: (res) => {
         if (closed) return;
         setJobs(res || []);
+        setConnectionLost(false);
+        setLastUpdatedAt(new Date().toISOString());
         setLoading(false);
       },
       onError: () => {
         if (!closed) {
+          setConnectionLost(true);
           fetchJobs();
         }
       }
@@ -42,6 +48,7 @@ export default function PartnerRequestsPage() {
     try {
       const res = await apiClient<any[]>('/mechanic/jobs');
       setJobs(res || []);
+      setLastUpdatedAt(new Date().toISOString());
     } catch (err) {
       console.error("Failed to fetch jobs", err);
     } finally {
@@ -51,21 +58,27 @@ export default function PartnerRequestsPage() {
 
   const handleAccept = async (id: number) => {
     try {
+      setActionLoadingId(id);
       await apiClient(`/mechanic/jobs/${id}/accept`, { method: 'POST' });
       toast.success('Request accepted');
       navigate(`/partner/request/${id}`);
     } catch (err: any) {
       toast.error(err.message || 'Failed to accept request');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleReject = async (id: number) => {
     try {
+      setActionLoadingId(id);
       await apiClient(`/mechanic/jobs/${id}/reject`, { method: 'POST', data: { reason: 'Busy' } });
       toast.success('Request rejected');
       void fetchJobs();
     } catch (err: any) {
       toast.error(err.message || 'Failed to reject request');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -79,11 +92,26 @@ export default function PartnerRequestsPage() {
     in: { opacity: 1, x: 0 },
     out: { opacity: 0, x: 10 }
   };
+  const lastUpdatedLabel = useMemo(
+    () => (lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleTimeString('en-IN') : null),
+    [lastUpdatedAt]
+  );
 
   return (
     <div className="flex flex-col h-[100dvh] bg-background">
       <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-md border-b border-border p-4">
         <h1 className="text-xl font-black text-foreground mb-4">Requests Hub</h1>
+        {connectionLost ? (
+          <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-700 dark:text-amber-400">
+            Connection lost. Refreshing request feed...
+            {lastUpdatedLabel ? ` Last updated ${lastUpdatedLabel}.` : ''}
+          </div>
+        ) : lastUpdatedLabel ? (
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Last updated {lastUpdatedLabel}
+          </div>
+        ) : null}
         
         {/* Tabs */}
         <div className="flex bg-secondary p-1 rounded-xl overflow-x-auto snap-x hide-scrollbar">
@@ -126,14 +154,24 @@ export default function PartnerRequestsPage() {
                        <div className="flex items-center gap-2 bg-primary/10 text-primary px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">
                          NEW REQUEST
                        </div>
+                       <div className="text-[11px] font-semibold text-muted-foreground">
+                         {job.currentEtaMinutes ? `${job.currentEtaMinutes} min` : 'Live'}
+                       </div>
                     </div>
                     <h3 className="font-bold text-lg mb-1">{job.issueSummary}</h3>
                     <p className="text-sm text-muted-foreground mb-3 flex items-center gap-1">
                        <MapPin className="w-3 h-3" /> {job.addressText || 'Unknown location'}
                     </p>
+                    <div className="mb-3 rounded-xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                      {job.CustomerUser?.CustomerProfile?.displayName || 'Customer'} • {job.vehicleLabel || 'Vehicle not set'}
+                    </div>
                     <div className="flex gap-2 pt-3 border-t border-border">
-                      <button onClick={() => handleReject(job.id)} className="flex-1 bg-secondary text-secondary-foreground font-bold py-2 rounded-lg text-sm hover:bg-secondary/80">Reject</button>
-                      <button onClick={() => handleAccept(job.id)} className="flex-1 bg-primary text-primary-foreground font-bold py-2 rounded-lg text-sm hover:opacity-90">Accept</button>
+                      <button onClick={() => handleReject(job.id)} disabled={actionLoadingId === job.id} className="flex-1 bg-secondary text-secondary-foreground font-bold py-2 rounded-lg text-sm hover:bg-secondary/80 disabled:opacity-60">
+                        {actionLoadingId === job.id ? 'Working...' : 'Reject'}
+                      </button>
+                      <button onClick={() => handleAccept(job.id)} disabled={actionLoadingId === job.id} className="flex-1 bg-primary text-primary-foreground font-bold py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-60">
+                        {actionLoadingId === job.id ? 'Working...' : 'Accept'}
+                      </button>
                     </div>
                   </motion.div>
                 )) : (
@@ -155,6 +193,9 @@ export default function PartnerRequestsPage() {
                     <p className="text-sm text-muted-foreground mb-3 flex items-center gap-1">
                        <MapPin className="w-3 h-3" /> {job.addressText}
                     </p>
+                    <div className="mb-3 rounded-xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                      {job.CustomerUser?.CustomerProfile?.displayName || 'Customer'} • ETA {job.currentEtaMinutes || '--'} min
+                    </div>
                     <div className="flex items-center text-primary font-bold text-sm">
                       <Navigation className="w-4 h-4 mr-1" /> Open active job
                     </div>

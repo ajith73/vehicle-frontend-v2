@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Wrench, Users, LogOut, Menu, X, Sun, Moon, Edit3, UserCircle, CheckCircle, BellRing, MessageSquare, Heart, Settings, ChevronLeft, ChevronRight, ShieldAlert, ShieldCheck, Globe, Star, ClipboardList, Radio, BarChart3, Landmark, Truck, Wallet, FileText, Globe2, MapPin, Bell, Search, Shield, Bot } from 'lucide-react';
+import { LayoutDashboard, Wrench, Users, LogOut, Menu, X, Sun, Moon, Edit3, UserCircle, CheckCircle, BellRing, MessageSquare, Heart, Settings, ChevronLeft, ChevronRight, ShieldAlert, ShieldCheck, Star, ClipboardList, Radio, BarChart3, Landmark, Truck, Wallet, FileText, Globe2, MapPin, Bell, Search, Shield, Bot } from 'lucide-react';
 import { apiClient } from '../api/apiClient';
 
 export default function AdminLayout() {
@@ -104,7 +104,6 @@ export default function AdminLayout() {
     { name: 'Support', path: '/admin/v2/support', icon: MessageSquare },
     { name: 'Analytics', path: '/admin/v2/analytics', icon: BarChart3 },
     { name: 'Automation', path: '/admin/v2/automation', icon: Bot },
-    { name: 'Services', path: '/admin/v2/services', icon: Globe },
     { name: 'Cities', path: '/admin/cities', icon: MapPin }, // Legacy
     { name: 'Zones', path: '/admin/v2/zones', icon: MapPin },
     { name: 'Pricing', path: '/admin/v2/pricing', icon: Wallet },
@@ -133,7 +132,6 @@ export default function AdminLayout() {
     '/admin/v2/support': 'Support',
     '/admin/v2/analytics': 'Analytics',
     '/admin/v2/automation': 'Automation',
-    '/admin/v2/services': 'Services',
     '/admin/cities': 'Cities',
     '/admin/v2/zones': 'Zones',
     '/admin/v2/pricing': 'Pricing',

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Loader2, MapPin, ShieldCheck, Wrench, X } from 'lucide-react';
-import { apiClient } from '../../api/apiClient';
+import { apiClient, AUTH_STATE_CHANGED_EVENT } from '../../api/apiClient';
 import { useDataContext } from '../../contexts/DataContext';
 import { useLocationContext } from '../../contexts/LocationContext';
 import OtpInput from '../ui/OtpInput';
@@ -162,6 +162,7 @@ export function RequestHelpModal({
       localStorage.setItem('token', authResponse.token);
       localStorage.setItem('refreshToken', authResponse.refreshToken);
       localStorage.setItem('role', authResponse.role);
+      window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGED_EVENT));
 
       await submitRequest();
     } catch (error: any) {

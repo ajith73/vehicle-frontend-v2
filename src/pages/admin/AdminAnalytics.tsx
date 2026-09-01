@@ -2,9 +2,57 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Users, Wrench, DollarSign, Download, Calendar, Loader2 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
+
+type AnalyticsTab = 'MARKETPLACE' | 'CUSTOMER' | 'PARTNER' | 'FINANCIAL';
+
+type TrendBar = {
+  label: string;
+  value: number;
+};
+
+const buildTrendBars = (tab: AnalyticsTab, data: any): TrendBar[] => {
+  if (tab === 'PARTNER' && Array.isArray(data)) {
+    return data
+      .slice(0, 8)
+      .map((item: any, index: number) => ({
+        label: item.mechanicName || item.city || `Partner ${index + 1}`,
+        value: Number(item.score || item.acceptRate || 0)
+      }));
+  }
+
+  if (tab === 'MARKETPLACE' && Array.isArray(data)) {
+    return data
+      .slice(0, 8)
+      .map((item: any, index: number) => ({
+        label: item.city || `Zone ${index + 1}`,
+        value: Number(item.requestCount || item.assignedCount || 0)
+      }));
+  }
+
+  if (tab === 'CUSTOMER' && data) {
+    return [
+      { label: 'Started', value: Number(data.requestStarted || 0) },
+      { label: 'Submitted', value: Number(data.requestSubmitted || 0) },
+      { label: 'Assigned', value: Number(data.requestAssigned || 0) },
+      { label: 'Completed', value: Number(data.serviceCompleted || 0) }
+    ];
+  }
+
+  if (tab === 'FINANCIAL' && data) {
+    return [
+      { label: 'GMV', value: Number(data.recordedTransactionValue || 0) },
+      { label: 'Platform', value: Number(data.platformFeeRealization || 0) },
+      { label: 'Membership', value: Number(data.membershipRevenue || 0) },
+      { label: 'Trusted', value: Number(data.trustedPartnerContribution || 0) }
+    ];
+  }
+
+  return [];
+};
 
 export default function AdminAnalytics() {
-  const [tab, setTab] = useState<'MARKETPLACE' | 'CUSTOMER' | 'PARTNER' | 'FINANCIAL'>('MARKETPLACE');
+  const [tab, setTab] = useState<AnalyticsTab>('MARKETPLACE');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
 
@@ -25,6 +73,8 @@ export default function AdminAnalytics() {
       setData(res);
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
+      setData(null);
+      toast.error(`Failed to load ${currentTab.toLowerCase()} analytics`);
     } finally {
       setLoading(false);
     }
@@ -129,6 +179,9 @@ export default function AdminAnalytics() {
     );
   };
 
+  const trendBars = buildTrendBars(tab, data);
+  const maxTrendValue = Math.max(...trendBars.map((item) => item.value), 1);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -183,21 +236,40 @@ export default function AdminAnalytics() {
          <h3 className="font-bold mb-6 flex items-center gap-2 capitalize">
             <TrendingUp className="w-4 h-4 text-muted-foreground" /> {tab.toLowerCase()} Trend Analysis
          </h3>
-         <div className="h-64 flex items-end justify-between gap-1 border-b border-border relative mt-8">
-            {/* Using mock trend data for visual display as historical data might be empty */}
-            {[30, 45, 20, 80, 60, 90, 100, 70, 50, 40, 65, 85, 30, 45, 20, 80, 60, 90, 100, 70, 50, 40, 65, 85, 45, 75, 80, 65, 95, 100].map((h, i) => (
-              <div key={i} className="w-full bg-primary/20 rounded-t hover:bg-primary transition-all cursor-pointer relative group flex flex-col justify-end" style={{ height: `${h}%` }}>
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-foreground text-background text-[10px] font-bold py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none whitespace-nowrap">
-                  Day {i+1}: {Math.round(h * 1.5)}
-                </div>
-              </div>
-            ))}
-         </div>
-         <div className="flex justify-between text-[10px] font-bold text-muted-foreground mt-2 uppercase tracking-wider">
-            <span>Aug 1</span>
-            <span>Aug 15</span>
-            <span>Aug 30</span>
-         </div>
+         {trendBars.length > 0 ? (
+           <>
+             <div className="mt-8 flex h-64 items-end justify-between gap-3 border-b border-border">
+               {trendBars.map((item) => {
+                 const height = Math.max(12, Math.round((item.value / maxTrendValue) * 100));
+                 return (
+                   <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                     <div className="relative flex h-full w-full items-end group">
+                       <div
+                         className="w-full rounded-t-xl bg-primary/20 transition-colors group-hover:bg-primary"
+                         style={{ height: `${height}%` }}
+                       >
+                         <div className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-[10px] font-bold text-background opacity-0 transition-opacity group-hover:opacity-100">
+                           {item.label}: {item.value}
+                         </div>
+                       </div>
+                     </div>
+                     <span className="w-full truncate text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground" title={item.label}>
+                       {item.label}
+                     </span>
+                   </div>
+                 );
+               })}
+             </div>
+             <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+               <span>Live data</span>
+               <span>Max: {maxTrendValue}</span>
+             </div>
+           </>
+         ) : (
+           <div className="flex min-h-[16rem] items-center justify-center rounded-xl border border-dashed border-border bg-background/50 text-sm text-muted-foreground">
+             No analytics trend data available for this tab yet.
+           </div>
+         )}
       </motion.div>
 
     </div>

@@ -3,11 +3,25 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, ArrowRight, ArrowLeft, Loader2, Key, Eye, EyeOff, Phone, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { apiClient } from '../../api/apiClient';
+import { apiClient, AUTH_STATE_CHANGED_EVENT } from '../../api/apiClient';
 import type { Mechanic } from '../../types';
-
-type AuthView = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD' | 'RESET_PASSWORD';
-type RegisterStep = 'INITIAL' | 'OTP_SENT' | 'OTP_VERIFIED';
+import { OtpDigitInput } from '../../components/customer/auth/OtpDigitInput';
+import {
+  type AuthView,
+  type RegisterStep,
+  getAuthPortalContent,
+  getInitialAuthView,
+  getInputClassName,
+  getPartnerBusinessSummary,
+  getPortalFromPath,
+  isApprovedPartnerProfile,
+  isStrongPartnerPassword,
+  isValidEmail,
+  isValidIndianMobile,
+  joinOtpDigits,
+  normalizeAuthEmail,
+  normalizeIndianMobile
+} from './auth/customerAuthUtils';
 
 type CustomerAuthPageProps = {
   portalOverride?: 'CUSTOMER' | 'PARTNER';
@@ -16,7 +30,7 @@ type CustomerAuthPageProps = {
 export default function CustomerAuthPage({ portalOverride }: CustomerAuthPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const portal = portalOverride || (location.pathname.includes('/partner/login') ? 'PARTNER' : 'CUSTOMER');
+  const portal = getPortalFromPath(location.pathname, portalOverride);
   
   // Read action query param for initial view state
   const params = new URLSearchParams(location.search);
@@ -24,11 +38,18 @@ export default function CustomerAuthPage({ portalOverride }: CustomerAuthPagePro
   const resetEmailParam = params.get('email') || '';
   const resetTokenParam = params.get('token') || '';
   
-  const [view, setView] = useState<AuthView>(
-    actionParam === 'register' ? 'REGISTER' : actionParam === 'reset' ? 'RESET_PASSWORD' : 'LOGIN'
-  );
+  const [view, setView] = useState<AuthView>(getInitialAuthView(actionParam));
   const [loading, setLoading] = useState(false);
-  const isPartnerLogin = portal === 'PARTNER';
+  const {
+    isPartnerLogin,
+    loginPath,
+    authTitle,
+    authSubtitle,
+    registerTitle,
+    loginButtonLabel,
+    registerButtonLabel,
+    resetSuccessRedirect
+  } = getAuthPortalContent(portal);
 
   // Registration States
   const [registerStep, setRegisterStep] = useState<RegisterStep>('INITIAL');
@@ -45,40 +66,10 @@ export default function CustomerAuthPage({ portalOverride }: CustomerAuthPagePro
   const [otpResendSeconds, setOtpResendSeconds] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
-  const normalizedEmail = email.trim().toLowerCase();
-  const normalizedMobile = mobile.replace(/\D/g, '').slice(0, 10);
-  const otp = otpDigits.join('');
-  const loginPath = isPartnerLogin ? '/partner/login' : '/customer/login';
-  const authTitle = isPartnerLogin ? 'RoadResQ Partner' : 'RoadResQ';
-  const authSubtitle = isPartnerLogin ? 'Partner Portal' : "Your Vehicle's Best Friend";
-  const registerTitle = isPartnerLogin ? 'Create Partner Account' : 'Create Account';
-  const loginButtonLabel = isPartnerLogin ? 'Partner Login' : 'Login';
-  const registerButtonLabel = isPartnerLogin ? 'Create Partner Account' : 'Register';
-  const resetSuccessRedirect = isPartnerLogin ? '/partner/login' : '/customer/login';
-  const isApprovedPartnerProfile = (profile: any) => {
-    const pendingVerificationStatus = String(profile?.pendingVerification?.status || '').toLowerCase();
-    return (
-      profile?.status === 'Approved' &&
-      Number(profile?.verificationLevel || 0) >= 1 &&
-      pendingVerificationStatus !== 'pending' &&
-      pendingVerificationStatus !== 'rejected'
-    );
-  };
-
-  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-  const isValidIndianMobile = (value: string) => /^\d{10}$/.test(value);
-  const isStrongPartnerPassword = (value: string) =>
-    value.length >= 6 &&
-    /[A-Z]/.test(value) &&
-    /[a-z]/.test(value) &&
-    /\d/.test(value) &&
-    /[^A-Za-z0-9]/.test(value);
-  const inputClass = (field: string, extra = '') =>
-    `w-full bg-background border rounded-xl text-sm font-medium focus:outline-none focus:ring-1 transition-all ${
-      fieldErrors[field]
-        ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-        : 'border-border/50 focus:border-primary focus:ring-primary'
-    } ${extra}`;
+  const normalizedEmail = normalizeAuthEmail(email);
+  const normalizedMobile = normalizeIndianMobile(mobile);
+  const otp = joinOtpDigits(otpDigits);
+  const inputClass = (field: string, extra = '') => getInputClassName(fieldErrors, field, extra);
   const setFieldError = (field: string, message: string) => {
     setFieldErrors((current) => ({ ...current, [field]: message }));
   };
@@ -103,7 +94,7 @@ export default function CustomerAuthPage({ portalOverride }: CustomerAuthPagePro
   }, [otpResendSeconds]);
 
   useEffect(() => {
-    setView(actionParam === 'register' ? 'REGISTER' : actionParam === 'reset' ? 'RESET_PASSWORD' : 'LOGIN');
+    setView(getInitialAuthView(actionParam));
     if (actionParam === 'reset') {
       setEmail(resetEmailParam);
       setResetToken(resetTokenParam);
@@ -154,6 +145,7 @@ export default function CustomerAuthPage({ portalOverride }: CustomerAuthPagePro
     if (res.mechanicId) {
       localStorage.setItem('mechanicId', String(res.mechanicId));
     }
+    window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGED_EVENT));
   };
   
   const handleLogin = async (e: React.FormEvent) => {
@@ -202,7 +194,7 @@ export default function CustomerAuthPage({ portalOverride }: CustomerAuthPagePro
   };
 
   const handleMobileChange = (value: string) => {
-    setMobile(value.replace(/\D/g, '').slice(0, 10));
+    setMobile(normalizeIndianMobile(value));
     clearFieldError('mobile');
   };
 
@@ -463,7 +455,7 @@ export default function CustomerAuthPage({ portalOverride }: CustomerAuthPagePro
         <div className="bg-card/70 backdrop-blur-xl border border-border/50 shadow-2xl rounded-3xl overflow-hidden p-8">
           
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-black text-foreground mb-2">RoadResQ</h1>
+            <h1 className="text-3xl font-black text-foreground mb-2">{authTitle}</h1>
             <p className="text-sm font-semibold text-muted-foreground">
               {authSubtitle}
             </p>
@@ -647,7 +639,7 @@ export default function CustomerAuthPage({ portalOverride }: CustomerAuthPagePro
                                   {selectedPartnerBusiness.businessName || selectedPartnerBusiness.name}
                                 </p>
                                 <p className="mt-1 text-xs text-muted-foreground truncate">
-                                  {[selectedPartnerBusiness.area, selectedPartnerBusiness.city, selectedPartnerBusiness.mechanicType].filter(Boolean).join(' • ') || 'Existing business selected'}
+                                  {getPartnerBusinessSummary(selectedPartnerBusiness) || 'Existing business selected'}
                                 </p>
                               </div>
                               <button
@@ -689,7 +681,7 @@ export default function CustomerAuthPage({ portalOverride }: CustomerAuthPagePro
                                       {business.businessName || business.name}
                                     </p>
                                     <p className="mt-1 truncate text-xs text-muted-foreground">
-                                      {[business.area, business.city, business.mechanicType].filter(Boolean).join(' • ')}
+                                      {getPartnerBusinessSummary(business)}
                                     </p>
                                   </div>
                                   <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold text-primary">
@@ -746,25 +738,14 @@ export default function CustomerAuthPage({ portalOverride }: CustomerAuthPagePro
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 rounded-2xl border border-border/50 bg-background/60 p-4">
                           <Key className="h-5 w-5 text-muted-foreground" />
-                          <div className="grid flex-1 grid-cols-6 gap-2">
-                            {otpDigits.map((digit, index) => (
-                              <input
-                                key={index}
-                                ref={(element) => {
-                                  otpRefs.current[index] = element;
-                                }}
-                                type="text"
-                                value={digit}
-                                onChange={(event) => handleOtpDigitChange(index, event.target.value)}
-                                onKeyDown={(event) => handleOtpKeyDown(index, event)}
-                                onPaste={handleOtpPaste}
-                                inputMode="numeric"
-                                maxLength={1}
-                                className={`h-12 rounded-xl border bg-card text-center text-lg font-black text-foreground focus:outline-none focus:ring-1 transition-all ${fieldErrors.otp ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-border/50 focus:border-primary focus:ring-primary'}`}
-                                aria-label={`OTP digit ${index + 1}`}
-                              />
-                            ))}
-                          </div>
+                          <OtpDigitInput
+                            digits={otpDigits}
+                            error={fieldErrors.otp}
+                            inputRefs={otpRefs}
+                            onChangeDigit={handleOtpDigitChange}
+                            onKeyDown={handleOtpKeyDown}
+                            onPaste={handleOtpPaste}
+                          />
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <p className="text-muted-foreground">

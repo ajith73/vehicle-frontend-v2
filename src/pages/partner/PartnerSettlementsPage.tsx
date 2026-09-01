@@ -3,6 +3,7 @@ import { ArrowRightLeft, ChevronLeft, Landmark, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { apiClient } from '../../api/apiClient';
+import { openRealtimeStream } from '../../api/realtime';
 
 type EarningsResponse = {
   summary: {
@@ -40,6 +41,18 @@ export default function PartnerSettlementsPage() {
       }
     };
     load();
+
+    const closeStream = openRealtimeStream<EarningsResponse>('/mechanic/earnings', {
+      event: 'mechanic:earnings:update',
+      onMessage: (payload) => {
+        setData(payload);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      closeStream();
+    };
   }, []);
 
   return (

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowDownRight, ArrowUpRight, CheckCircle2, Clock, CreditCard, Download, Loader2, Search, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../../api/apiClient';
+import { openRealtimeStream } from '../../api/realtime';
 import type { CustomerRequest } from '../../types';
 
 type SettlementRecord = {
@@ -49,6 +50,18 @@ export default function AdminPayments() {
 
   useEffect(() => {
     loadData();
+
+    const closeStream = openRealtimeStream<SettlementRecord[]>('/admin/finance/settlements', {
+      event: 'admin:settlements:update',
+      onMessage: (payload) => {
+        setSettlements(Array.isArray(payload) ? payload : []);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      closeStream();
+    };
   }, []);
 
   const ledgerRows = useMemo(() => {

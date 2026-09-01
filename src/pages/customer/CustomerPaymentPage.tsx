@@ -1,20 +1,66 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, CreditCard, Landmark, CheckCircle2, ShieldCheck, FileText, Loader2, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronLeft,
+  CreditCard,
+  FileText,
+  Landmark,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  Wallet,
+  XCircle
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../../api/apiClient';
 
 type PaymentState = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED';
 
+type QuoteLineItem = {
+  id?: number | string;
+  label?: string;
+  totalAmount?: number;
+};
+
+type QuoteRecord = {
+  notes?: string;
+  totalAmount?: number;
+  taxAmount?: number;
+  feeAmount?: number;
+  RequestQuoteLineItems?: QuoteLineItem[];
+  Mechanic?: {
+    name?: string;
+    businessName?: string;
+  };
+};
+
+type PaymentTransactionRecord = {
+  transactionReference?: string;
+  paidAt?: string;
+  createdAt?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
+};
+
+type PaymentStatusRecord = {
+  paymentStatus?: string;
+  finalAmount?: number;
+  payments?: PaymentTransactionRecord[];
+};
+
+const formatMoney = (value: unknown) => `₹${Number(value || 0).toFixed(2)}`;
+
 export default function CustomerPaymentPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [paymentState, setPaymentState] = useState<PaymentState>('PENDING');
-  const [paymentMethod, setPaymentMethod] = useState('MOCK_SUCCESS');
+  const [paymentMethod, setPaymentMethod] = useState<'MOCK_SUCCESS' | 'MOCK_FAILURE'>('MOCK_SUCCESS');
   const [showMockPopup, setShowMockPopup] = useState(false);
-  const [quote, setQuote] = useState<any>(null);
-  const [paymentStatus, setPaymentStatus] = useState<any>(null);
+  const [quote, setQuote] = useState<QuoteRecord | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const handlePay = () => {
     setShowMockPopup(true);
@@ -23,10 +69,11 @@ export default function CustomerPaymentPage() {
   const loadPaymentData = async () => {
     if (!id) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const [quoteData, paymentData] = await Promise.all([
-        apiClient<any>(`/customer/requests/${id}/quote`),
-        apiClient<any>(`/customer/requests/${id}/payment/status`).catch(() => null)
+        apiClient<QuoteRecord>(`/customer/requests/${id}/quote`),
+        apiClient<PaymentStatusRecord>(`/customer/requests/${id}/payment/status`).catch(() => null)
       ]);
       setQuote(quoteData);
       setPaymentStatus(paymentData);
@@ -38,7 +85,9 @@ export default function CustomerPaymentPage() {
         setPaymentState('PENDING');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to load payment details');
+      const message = error.message || 'Failed to load payment details';
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -51,6 +100,7 @@ export default function CustomerPaymentPage() {
   const latestPayment = useMemo(() => paymentStatus?.payments?.[0] || null, [paymentStatus]);
   const totalAmount = Number(quote?.totalAmount || paymentStatus?.finalAmount || 0);
   const partnerName = quote?.Mechanic?.businessName || quote?.Mechanic?.name || 'Assigned partner';
+  const lineItems = quote?.RequestQuoteLineItems || [];
 
   const confirmMockPayment = async (method: 'MOCK_SUCCESS' | 'MOCK_FAILURE') => {
     if (!id) return;
@@ -82,54 +132,88 @@ export default function CustomerPaymentPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-lg items-center px-4 py-8">
+        <div className="w-full rounded-[2rem] border border-border bg-card p-6 text-center shadow-sm">
+          <XCircle className="mx-auto h-10 w-10 text-destructive" />
+          <h2 className="mt-4 text-xl font-black text-foreground">Payment details unavailable</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{loadError}</p>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <button
+              onClick={() => void loadPaymentData()}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </button>
+            <Link
+              to={`/customer/request/${id}`}
+              className="inline-flex flex-1 items-center justify-center rounded-xl border border-border bg-background px-4 py-3 text-sm font-bold text-foreground"
+            >
+              Back to request
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (paymentState === 'PAID') {
     return (
-      <div className="flex flex-col h-[100dvh] bg-background items-center justify-center p-4">
-        <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
-          <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+      <div className="flex h-[100dvh] flex-col items-center justify-center bg-background p-4">
+        <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500/10">
+          <CheckCircle2 className="h-12 w-12 text-emerald-500" />
         </div>
-        <h1 className="text-3xl font-black text-foreground mb-2">Payment Successful</h1>
-        <p className="text-muted-foreground font-medium mb-8 text-center max-w-xs">
-          Thank you! ₹{totalAmount.toFixed(2)} has been paid successfully to {partnerName}.
+        <h1 className="text-center text-3xl font-black text-foreground">Payment successful</h1>
+        <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
+          {formatMoney(totalAmount)} has been recorded successfully for {partnerName}.
         </p>
-        
-        <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-4 mb-8">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-muted-foreground">Transaction ID</span>
-            <span className="font-bold">{latestPayment?.transactionReference || 'Generated'}</span>
-          </div>
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-muted-foreground">Date</span>
-            <span className="font-bold">{new Date(latestPayment?.paidAt || latestPayment?.createdAt || Date.now()).toLocaleDateString()}</span>
-          </div>
+
+        <div className="mt-8 w-full max-w-sm rounded-3xl border border-border bg-card p-5">
           <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Transaction ID</span>
+            <span className="max-w-[55%] truncate font-bold text-foreground">{latestPayment?.transactionReference || 'Generated'}</span>
+          </div>
+          <div className="mt-3 flex justify-between text-sm">
+            <span className="text-muted-foreground">Date</span>
+            <span className="font-bold text-foreground">
+              {new Date(latestPayment?.paidAt || latestPayment?.createdAt || Date.now()).toLocaleString('en-IN')}
+            </span>
+          </div>
+          <div className="mt-3 flex justify-between text-sm">
             <span className="text-muted-foreground">Method</span>
-            <span className="font-bold">{latestPayment?.paymentMethod || 'Mock gateway'}</span>
+            <span className="font-bold text-foreground">{latestPayment?.paymentMethod || 'Mock gateway'}</span>
           </div>
         </div>
 
-        <Link to={`/customer/request/${id}/rating`} className="w-full max-w-sm bg-primary text-primary-foreground font-bold p-4 rounded-xl text-center shadow-lg hover:scale-105 transition-transform">
-          Continue to Rating
-        </Link>
+        <div className="mt-8 flex w-full max-w-sm flex-col gap-3">
+          <Link to={`/customer/request/${id}/rating`} className="rounded-2xl bg-primary px-4 py-4 text-center text-base font-black text-primary-foreground">
+            Continue to rating
+          </Link>
+          <Link to={`/customer/request/${id}`} className="rounded-2xl border border-border bg-card px-4 py-4 text-center text-sm font-bold text-foreground">
+            Back to request
+          </Link>
+        </div>
       </div>
     );
   }
 
   if (paymentState === 'FAILED') {
     return (
-      <div className="flex flex-col h-[100dvh] bg-background items-center justify-center p-4">
-        <div className="w-24 h-24 bg-destructive/10 rounded-full flex items-center justify-center mb-6">
-          <XCircle className="w-12 h-12 text-destructive" />
+      <div className="flex h-[100dvh] flex-col items-center justify-center bg-background p-4">
+        <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-destructive/10">
+          <XCircle className="h-12 w-12 text-destructive" />
         </div>
-        <h1 className="text-3xl font-black text-foreground mb-2">Payment Failed</h1>
-        <p className="text-muted-foreground font-medium mb-8 text-center max-w-xs">
-          The mock payment flow returned a failure state. You can retry with success or failure again until Razorpay is integrated.
+        <h1 className="text-center text-3xl font-black text-foreground">Payment failed</h1>
+        <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
+          This is the temporary mock failure path for QA until Razorpay is connected. You can retry now.
         </p>
-        <div className="flex w-full max-w-sm flex-col gap-3">
-          <button onClick={() => setPaymentState('PENDING')} className="rounded-xl bg-primary px-4 py-4 font-bold text-primary-foreground">
+        <div className="mt-8 flex w-full max-w-sm flex-col gap-3">
+          <button onClick={() => setPaymentState('PENDING')} className="rounded-2xl bg-primary px-4 py-4 font-bold text-primary-foreground">
             Retry payment
           </button>
-          <Link to={`/customer/request/${id}`} className="rounded-xl border border-border bg-card px-4 py-4 text-center font-bold text-foreground">
+          <Link to={`/customer/request/${id}`} className="rounded-2xl border border-border bg-card px-4 py-4 text-center font-bold text-foreground">
             Back to request
           </Link>
         </div>
@@ -138,101 +222,150 @@ export default function CustomerPaymentPage() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-md border-b border-border p-4 flex items-center justify-between">
-        <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors">
-          <ChevronLeft className="w-6 h-6" />
+    <div className="flex h-[100dvh] flex-col bg-background">
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-background/90 p-4 backdrop-blur-md">
+        <button onClick={() => navigate(-1)} className="rounded-full p-2 transition-colors hover:bg-secondary">
+          <ChevronLeft className="h-6 w-6" />
         </button>
         <h1 className="text-lg font-black text-foreground">Checkout</h1>
-        <div className="w-10"></div>
+        <div className="w-10" />
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full pb-32">
-        
-        <div className="bg-card border border-border rounded-[2rem] p-6 shadow-sm mb-6">
-          <div className="flex items-center gap-3 mb-4 border-b border-border pb-4">
-            <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-               <FileText className="w-6 h-6 text-muted-foreground" />
-            </div>
-            <div>
-              <h3 className="font-bold text-lg">Service Summary</h3>
-              <p className="text-sm text-muted-foreground">{quote?.notes || 'Approved quote ready for payment'}</p>
-            </div>
-          </div>
-          
-          <div className="space-y-3 mb-6 text-sm">
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground font-medium">Partner</span>
-              <span className="font-bold">{partnerName}</span>
-            </div>
-            {(quote?.RequestQuoteLineItems || []).map((item: any) => (
-              <div key={item.id || item.label} className="flex justify-between items-center">
-                <span className="text-muted-foreground font-medium">{item.label}</span>
-                <span className="font-bold">₹{Number(item.totalAmount || 0).toFixed(2)}</span>
+      <main className="mx-auto flex-1 overflow-y-auto p-4 pb-36 sm:max-w-4xl sm:p-6">
+        <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
+          <section className="space-y-6">
+            <div className="rounded-[2rem] border border-border bg-card p-6 shadow-sm">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                  <Wallet className="h-7 w-7 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-foreground">Complete your payment</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Your quote is approved. Finish checkout to close the request and continue to rating.
+                  </p>
+                </div>
               </div>
-            ))}
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground font-medium">Taxes & Platform Fee</span>
-              <span className="font-bold">₹{(Number(quote?.taxAmount || 0) + Number(quote?.feeAmount || 0)).toFixed(2)}</span>
-            </div>
-          </div>
 
-          <div className="h-[2px] bg-border my-4 border-dashed border-b border-t-0 border-r-0 border-l-0"></div>
-          
-          <div className="flex justify-between items-center mt-4">
-            <span className="font-black text-xl">Total To Pay</span>
-            <span className="font-black text-3xl text-primary">₹{totalAmount.toFixed(2)}</span>
-          </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Partner</p>
+                  <p className="mt-1 text-sm font-bold text-foreground">{partnerName}</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Status</p>
+                  <p className="mt-1 text-sm font-bold text-foreground">{paymentStatus?.paymentStatus || 'PAYMENT_PENDING'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-border bg-card p-6 shadow-sm">
+              <div className="flex items-center gap-3 border-b border-border pb-4">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-foreground">Payment summary</h3>
+                  <p className="text-sm text-muted-foreground">{quote?.notes || 'Approved quote ready for payment'}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3 text-sm">
+                {lineItems.map((item) => (
+                  <div key={item.id || item.label} className="flex items-center justify-between rounded-2xl border border-border bg-background px-4 py-3">
+                    <span className="font-medium text-foreground">{item.label || 'Line item'}</span>
+                    <span className="font-bold text-foreground">{formatMoney(item.totalAmount)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tax</span>
+                  <span className="font-bold text-foreground">{formatMoney(quote?.taxAmount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Platform fee</span>
+                  <span className="font-bold text-foreground">{formatMoney(quote?.feeAmount)}</span>
+                </div>
+              </div>
+
+              <div className="mt-5 border-t border-dashed border-border pt-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-black text-foreground">Total to pay</span>
+                  <span className="text-3xl font-black text-primary">{formatMoney(totalAmount)}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <aside className="space-y-6">
+            <div className="rounded-[2rem] border border-border bg-card p-6 shadow-sm">
+              <h3 className="text-lg font-black text-foreground">Select payment method</h3>
+              <div className="mt-4 flex flex-col gap-3">
+                <label className="relative flex cursor-pointer items-start gap-4 overflow-hidden rounded-2xl border-2 border-primary bg-primary/5 p-4">
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={paymentMethod === 'MOCK_SUCCESS'}
+                    onChange={() => setPaymentMethod('MOCK_SUCCESS')}
+                    className="mt-1 h-5 w-5 accent-primary"
+                  />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+                    <Landmark className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-foreground">Mock success payment</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Use this while Razorpay is pending to verify successful checkout flow.</p>
+                  </div>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-border bg-background p-4 transition-colors hover:border-primary/40">
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={paymentMethod === 'MOCK_FAILURE'}
+                    onChange={() => setPaymentMethod('MOCK_FAILURE')}
+                    className="mt-1 h-5 w-5 accent-primary"
+                  />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary">
+                    <CreditCard className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-foreground">Mock failure payment</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Use this to verify retry, failure message, and payment support handling.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-primary/20 bg-primary/5 p-6 shadow-sm">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-black text-foreground">What happens next</h3>
+              </div>
+              <div className="mt-4 space-y-4 text-sm text-muted-foreground">
+                <p>1. Complete the mock payment for this request.</p>
+                <p>2. RoadResQ records the transaction and updates request status.</p>
+                <p>3. You continue to rating, review, and invoice follow-up.</p>
+              </div>
+            </div>
+          </aside>
         </div>
-
-        <h3 className="font-bold text-lg mb-4 pl-2">Select Payment Method</h3>
-        
-        <div className="flex flex-col gap-3">
-          <label className="flex items-center gap-4 bg-card border-2 border-primary rounded-2xl p-4 cursor-pointer relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 rounded-bl-[100px]" />
-            <input type="radio" name="payment" checked={paymentMethod === 'MOCK_SUCCESS'} onChange={() => setPaymentMethod('MOCK_SUCCESS')} className="w-5 h-5 accent-primary" />
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-               <span className="font-black text-primary">UPI</span>
-            </div>
-            <div className="flex-1">
-              <p className="font-bold">UPI / QR Code</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Google Pay, PhonePe, Paytm</p>
-            </div>
-          </label>
-
-          <label className="flex items-center gap-4 bg-card border border-border hover:border-primary/50 rounded-2xl p-4 cursor-pointer">
-            <input type="radio" name="payment" checked={paymentMethod === 'MOCK_FAILURE'} onChange={() => setPaymentMethod('MOCK_FAILURE')} className="w-5 h-5 accent-primary" />
-            <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center shrink-0">
-               <CreditCard className="w-5 h-5 text-muted-foreground" />
-            </div>
-            <div className="flex-1">
-              <p className="font-bold">Test failure path</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Use this to simulate failed Razorpay checkout during QA</p>
-            </div>
-          </label>
-        </div>
-
-        <div className="flex items-center gap-2 mt-6 justify-center text-xs text-muted-foreground font-medium">
-          <ShieldCheck className="w-4 h-4 text-emerald-500" />
-          100% Secure Payments
-        </div>
-
       </main>
 
-      {/* Sticky Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 pb-safe shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
-        <div className="max-w-lg mx-auto w-full flex gap-4">
-          <button 
+      <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-card p-4 pb-safe shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-4">
+          <div className="hidden min-w-0 flex-1 rounded-2xl border border-border bg-background px-4 py-3 sm:block">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Selected method</p>
+            <p className="mt-1 truncate text-sm font-bold text-foreground">
+              {paymentMethod === 'MOCK_SUCCESS' ? 'Mock success payment' : 'Mock failure payment'}
+            </p>
+          </div>
+          <button
             onClick={handlePay}
             disabled={paymentState === 'PROCESSING'}
-            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground p-5 rounded-2xl font-black text-lg shadow-[0_8px_20px_rgba(59,130,246,0.3)] hover:scale-[1.02] transition-transform disabled:opacity-70 disabled:hover:scale-100"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-4 text-base font-black text-primary-foreground shadow-[0_8px_20px_rgba(59,130,246,0.3)] transition-transform hover:scale-[1.01] disabled:opacity-70 disabled:hover:scale-100 sm:w-auto"
           >
-            {paymentState === 'PROCESSING' ? (
-              <span className="flex items-center gap-2 animate-pulse">Processing...</span>
-            ) : (
-              `Pay ₹${totalAmount.toFixed(2)}`
-            )}
+            {paymentState === 'PROCESSING' ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+            {paymentState === 'PROCESSING' ? 'Processing...' : `Pay ${formatMoney(totalAmount)}`}
           </button>
         </div>
       </div>
@@ -240,16 +373,19 @@ export default function CustomerPaymentPage() {
       {showMockPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl">
-            <h2 className="text-xl font-black text-foreground">Mock Razorpay Tester</h2>
+            <h2 className="text-xl font-black text-foreground">Mock Razorpay tester</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Razorpay is not connected yet. Choose a temporary outcome for this request payment.
+              Razorpay is not connected yet. Choose a temporary outcome for this payment.
             </p>
             <div className="mt-6 grid gap-3">
+              <button onClick={() => void confirmMockPayment(paymentMethod)} className="rounded-xl bg-primary px-4 py-4 font-bold text-primary-foreground">
+                Continue with selected method
+              </button>
               <button onClick={() => void confirmMockPayment('MOCK_SUCCESS')} className="rounded-xl bg-emerald-600 px-4 py-4 font-bold text-white">
-                Mock Success Payment
+                Force success
               </button>
               <button onClick={() => void confirmMockPayment('MOCK_FAILURE')} className="rounded-xl bg-destructive px-4 py-4 font-bold text-destructive-foreground">
-                Mock Failed Payment
+                Force failure
               </button>
               <button onClick={() => setShowMockPopup(false)} className="rounded-xl border border-border bg-background px-4 py-4 font-bold text-foreground">
                 Cancel
@@ -258,7 +394,6 @@ export default function CustomerPaymentPage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

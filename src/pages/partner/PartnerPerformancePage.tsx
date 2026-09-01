@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Target, Star, Clock, CheckCircle2, XCircle, ChevronLeft, Loader2 } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Clock, RefreshCw, Star, Target, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { apiClient } from '../../api/apiClient';
+import ErrorStateCard from '../../components/common/ErrorStateCard';
+import LoadingScreen from '../../components/common/LoadingScreen';
+import MetricCard from '../../components/common/MetricCard';
 
 type InsightsResponse = {
   mechanicName: string;
@@ -24,25 +27,33 @@ export default function PartnerPerformancePage() {
   const navigate = useNavigate();
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await apiClient<InsightsResponse>('/mechanic/performance/insights');
+      setData(response);
+    } catch (error: any) {
+      const message = error.message || 'Failed to load partner performance';
+      setLoadError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const response = await apiClient<InsightsResponse>('/mechanic/performance/insights');
-        setData(response);
-      } catch (error: any) {
-        toast.error(error.message || 'Failed to load partner performance');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    void load();
   }, []);
 
-  if (loading) {
+  if (loading) return <LoadingScreen />;
+
+  if (loadError) {
     return (
-      <div className="flex items-center justify-center h-[100dvh] bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="mx-auto flex h-[100dvh] max-w-lg items-center px-4">
+        <ErrorStateCard title="Performance unavailable" description={loadError} onRetry={() => void load()} icon={Target} className="w-full" />
       </div>
     );
   }
@@ -50,90 +61,92 @@ export default function PartnerPerformancePage() {
   const metrics = data?.metrics;
 
   return (
-    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col h-[100dvh] bg-background">
-      <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-md border-b border-border p-4 flex items-center gap-3">
-        <button onClick={() => navigate('/partner')} className="p-2 -ml-2 bg-secondary rounded-full hover:bg-secondary/80 transition-colors">
-          <ChevronLeft className="w-5 h-5 text-foreground" />
-        </button>
-        <div>
-          <h1 className="text-xl font-black text-foreground mb-0.5">Performance</h1>
-          <p className="text-xs font-semibold text-muted-foreground">Latest dispatch and reliability snapshot</p>
+    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex h-[100dvh] flex-col bg-background">
+      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-background/90 p-4 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/partner')} className="rounded-full bg-secondary p-2 transition-colors hover:bg-secondary/80">
+            <ChevronLeft className="h-5 w-5 text-foreground" />
+          </button>
+          <div>
+            <h1 className="text-xl font-black text-foreground">Performance</h1>
+            <p className="text-xs font-semibold text-muted-foreground">Latest dispatch and reliability snapshot</p>
+          </div>
         </div>
+        <button onClick={() => void load()} className="rounded-full border border-border bg-card p-2" aria-label="Refresh performance">
+          <RefreshCw className="h-4 w-4 text-primary" />
+        </button>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 max-w-4xl mx-auto w-full pb-32 flex flex-col gap-6">
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-card border-2 border-primary rounded-2xl p-6 shadow-[0_10px_30px_rgba(var(--primary),0.1)] flex items-center justify-between">
+      <main className="mx-auto flex-1 overflow-y-auto p-4 pb-32 sm:max-w-4xl sm:p-6">
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex items-center justify-between rounded-2xl border-2 border-primary bg-card p-6 shadow-[0_10px_30px_rgba(59,130,246,0.1)]">
           <div>
-            <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">Partner score</h2>
+            <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Partner score</h2>
             <div className="flex items-end gap-2">
               <span className="text-5xl font-black text-foreground">{Number(data?.score || 0).toFixed(1)}</span>
-              <span className="text-sm font-bold text-muted-foreground mb-1.5">/ 100</span>
+              <span className="mb-1.5 text-sm font-bold text-muted-foreground">/ 100</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-2 font-medium">{data?.mechanicName || 'Partner account'}</p>
+            <p className="mt-2 text-xs font-medium text-muted-foreground">{data?.mechanicName || 'Partner account'}</p>
           </div>
-          <div className="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center border-4 border-yellow-500/20">
-            <Star className="w-10 h-10 text-yellow-500 fill-yellow-500" />
+          <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-yellow-500/20 bg-yellow-500/10">
+            <Star className="h-10 w-10 fill-yellow-500 text-yellow-500" />
           </div>
         </motion.div>
 
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col gap-6">
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <MetricCard label="Dispatch attempts" value={<span className="text-3xl font-black">{metrics?.dispatchAttemptsReceived || 0}</span>} />
+          <MetricCard label="Average ETA" value={<span className="text-3xl font-black">{Number(metrics?.averageEtaMinutes || 0).toFixed(0)} min</span>} />
+        </div>
+
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
           {[
             ['Acceptance Rate', metrics?.acceptRate || 0, 'Requests you accepted vs received', 'emerald'],
             ['Completion Rate', metrics?.completionRate || 0, 'Jobs completed without cancellation', 'blue'],
             ['Reject Rate', metrics?.rejectRate || 0, 'Requests declined or skipped', 'destructive'],
-            ['Quote Approval', metrics?.quoteApprovalRate || 0, 'Customer approvals after inspection quote', 'amber'],
+            ['Quote Approval', metrics?.quoteApprovalRate || 0, 'Customer approvals after inspection quote', 'amber']
           ].map(([label, value, note, tone]) => (
-            <div key={String(label)}>
-              <div className="flex justify-between items-end mb-2">
+            <div key={String(label)} className="mb-6 last:mb-0">
+              <div className="mb-2 flex items-end justify-between">
                 <div>
-                  <h3 className="font-bold text-sm flex items-center gap-2">
-                    {tone === 'emerald' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> :
-                     tone === 'blue' ? <Target className="w-4 h-4 text-blue-500" /> :
-                     tone === 'amber' ? <Star className="w-4 h-4 text-amber-500" /> :
-                     <XCircle className="w-4 h-4 text-destructive" />}
+                  <h3 className="flex items-center gap-2 text-sm font-bold">
+                    {tone === 'emerald' ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> :
+                     tone === 'blue' ? <Target className="h-4 w-4 text-blue-500" /> :
+                     tone === 'amber' ? <Star className="h-4 w-4 text-amber-500" /> :
+                     <XCircle className="h-4 w-4 text-destructive" />}
                     {label}
                   </h3>
                   <p className="text-[10px] text-muted-foreground">{note}</p>
                 </div>
                 <span className={`font-black ${tone === 'emerald' ? 'text-emerald-500' : tone === 'blue' ? 'text-blue-500' : tone === 'amber' ? 'text-amber-500' : 'text-destructive'}`}>{Number(value).toFixed(0)}%</span>
               </div>
-              <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                <motion.div initial={{ width: 0 }} animate={{ width: `${Math.max(0, Math.min(100, Number(value)))}%` }} transition={{ duration: 0.8 }} className={`h-full rounded-full ${tone === 'emerald' ? 'bg-emerald-500' : tone === 'blue' ? 'bg-blue-500' : tone === 'amber' ? 'bg-amber-500' : 'bg-destructive'}`}></motion.div>
+              <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                <motion.div initial={{ width: 0 }} animate={{ width: `${Math.max(0, Math.min(100, Number(value)))}%` }} transition={{ duration: 0.8 }} className={`h-full rounded-full ${tone === 'emerald' ? 'bg-emerald-500' : tone === 'blue' ? 'bg-blue-500' : tone === 'amber' ? 'bg-amber-500' : 'bg-destructive'}`} />
               </div>
             </div>
           ))}
         </motion.div>
 
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="grid grid-cols-2 gap-4">
-          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm flex flex-col items-center text-center">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-              <Clock className="w-5 h-5 text-primary" />
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="mt-6 grid grid-cols-2 gap-4">
+          <div className="flex flex-col items-center rounded-2xl border border-border bg-card p-4 text-center shadow-sm">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <Clock className="h-5 w-5 text-primary" />
             </div>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Hours Online</p>
-            <p className="font-black text-xl text-foreground">{Number(metrics?.onlineHours || 0).toFixed(1)} h</p>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Hours Online</p>
+            <p className="text-xl font-black text-foreground">{Number(metrics?.onlineHours || 0).toFixed(1)} h</p>
           </div>
 
-          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm flex flex-col items-center text-center">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-              <Clock className="w-5 h-5 text-primary" />
+          <div className="flex flex-col items-center rounded-2xl border border-border bg-card p-4 text-center shadow-sm">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <Star className="h-5 w-5 text-primary" />
             </div>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Avg Arrival</p>
-            <p className="font-black text-xl text-foreground">{Number(metrics?.averageEtaMinutes || 0).toFixed(0)} min</p>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Improvement items</p>
+            <p className="text-xl font-black text-foreground">{(data?.improvements || []).length}</p>
           </div>
         </motion.div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Dispatch attempts</p>
-            <p className="mt-2 text-3xl font-black text-foreground">{metrics?.dispatchAttemptsReceived || 0}</p>
-          </div>
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Improvement focus</p>
-            <div className="mt-2 space-y-2">
-              {(data?.improvements || []).map((item) => (
-                <p key={item} className="text-sm text-muted-foreground">{item}</p>
-              ))}
-            </div>
+        <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Improvement focus</p>
+          <div className="mt-3 space-y-2">
+            {(data?.improvements || []).length > 0 ? data?.improvements.map((item) => <p key={item} className="text-sm text-muted-foreground">{item}</p>) : <p className="text-sm text-muted-foreground">No active improvement suggestions right now.</p>}
           </div>
         </div>
       </main>

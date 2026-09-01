@@ -5,6 +5,7 @@ import { apiClient } from '../api/apiClient';
 import type { Mechanic } from '../types';
 import toast from 'react-hot-toast';
 import { LazyImage } from '../components/shared/LazyImage';
+import { formatPhoneDisplay } from '../utils/phone';
 
 export default function MechanicDashboard() {
   const { id } = useParams<{ id: string }>();
@@ -247,7 +248,7 @@ export default function MechanicDashboard() {
                             </p>
                           ))
                         ) : (
-                          <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Phone:</span> {displayData.phone || 'N/A'}</p>
+                          <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Phone:</span> {formatPhoneDisplay(displayData.phone)}</p>
                         )}
                         {accountEmail || (displayData.emails && displayData.emails[0]) ? (
                            <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Email:</span> {accountEmail || (displayData.emails && displayData.emails[0])}</p>

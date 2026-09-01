@@ -7,6 +7,7 @@ import PublicLayout from './components/layout/PublicLayout';
 import CustomerLayout from './components/layout/CustomerLayout';
 import PartnerLayout from './components/layout/PartnerLayout';
 import AppProviders from './app/AppProviders';
+import RealtimeNotificationBridge from './components/realtime/RealtimeNotificationBridge';
 
 import LandingPage from './pages/LandingPage';
 import ListPage from './pages/ListPage';
@@ -59,7 +60,6 @@ const AdminPartners = lazy(() => import('./pages/admin/AdminPartners'));
 const AdminPayments = lazy(() => import('./pages/admin/AdminPayments'));
 const AdminSupport = lazy(() => import('./pages/admin/AdminSupport'));
 const AdminAnalytics = lazy(() => import('./pages/admin/AdminAnalytics'));
-const AdminServices = lazy(() => import('./pages/admin/AdminServices'));
 const AdminSeo = lazy(() => import('./pages/admin/AdminSeo'));
 const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'));
 const AdminAuditLogs = lazy(() => import('./pages/admin/AdminAuditLogs'));
@@ -219,6 +219,7 @@ export function AppRoutes() {
   return (
     <>
       <AnalyticsTracker />
+      <RealtimeNotificationBridge />
       <ClientToaster />
       <Suspense fallback={<RouteLoader />}>
         <Routes>
@@ -254,7 +255,6 @@ export function AppRoutes() {
               <Route path="v2/payments" element={<AdminPayments />} />
               <Route path="v2/support" element={<AdminSupport />} />
               <Route path="v2/analytics" element={<AdminAnalytics />} />
-              <Route path="v2/services" element={<AdminServices />} />
               <Route path="v2/seo" element={<AdminSeo />} />
               <Route path="v2/automation" element={<AdminAutomationEngine />} />
               <Route path="v2/notifications" element={<AdminNotifications />} />

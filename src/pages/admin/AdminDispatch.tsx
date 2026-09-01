@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { apiClient } from '../../api/apiClient';
 import type { CustomerRequest, DispatchScoringResponse, Mechanic } from '../../types';
 import { getRequestStatusMeta, getRequestToneClasses, isSearchingRequestStatus } from '../../lib/requestLifecycle';
+import { formatPhoneDisplay } from '../../utils/phone';
+import { useLocation } from 'react-router-dom';
 
 type AutomationOverview = {
   metrics: {
@@ -27,6 +29,7 @@ const statusColor = (value?: string) => {
 };
 
 export default function AdminDispatch() {
+  const location = useLocation();
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
   const [mechanics, setMechanics] = useState<Mechanic[]>([]);
   const [dispatchScoring, setDispatchScoring] = useState<DispatchScoringResponse | null>(null);
@@ -37,6 +40,9 @@ export default function AdminDispatch() {
   const [loading, setLoading] = useState(true);
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [savingRules, setSavingRules] = useState(false);
+  const preselectedRequestId = typeof location.state?.selectedRequestId === 'number'
+    ? location.state.selectedRequestId
+    : null;
 
   const fetchData = async () => {
     try {
@@ -50,7 +56,9 @@ export default function AdminDispatch() {
       setMechanics(liveMechanics || []);
       setDispatchScoring(scoring || null);
       setOverview(automation || null);
-      if (!selectedRequestId && liveRequests?.length) {
+      if (preselectedRequestId && liveRequests?.some((request) => request.id === preselectedRequestId)) {
+        setSelectedRequestId(preselectedRequestId);
+      } else if (!selectedRequestId && liveRequests?.length) {
         setSelectedRequestId(liveRequests[0].id);
       }
     } catch (error) {
@@ -62,7 +70,7 @@ export default function AdminDispatch() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [preselectedRequestId]);
 
   const unassignedRequests = useMemo(() => {
     return requests.filter((request) => !request.Mechanic?.id || isSearchingRequestStatus(request.status));
@@ -80,7 +88,7 @@ export default function AdminDispatch() {
     return mechanics
       .filter((mechanic) => mechanic.status === 'Approved')
       .filter((mechanic) => {
-        const text = `${mechanic.businessName || mechanic.name || ''} ${mechanic.city || ''} ${mechanic.phone || ''}`.toLowerCase();
+        const text = `${mechanic.businessName || mechanic.name || ''} ${mechanic.city || ''} ${formatPhoneDisplay(mechanic.phone, '')}`.toLowerCase();
         return !query || text.includes(query.toLowerCase());
       })
       .sort((left, right) => {

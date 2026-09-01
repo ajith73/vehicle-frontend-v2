@@ -9,6 +9,7 @@ import type { Mechanic } from '../types';
 import { Pagination } from '../components/Pagination';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { getMechanicStatus } from '../utils/mechanicUtils';
+import { formatPhoneDisplay } from '../utils/phone';
 
 import MechanicVerificationPanel from '../components/admin/MechanicVerificationPanel';
 
@@ -507,7 +508,7 @@ export default function AdminMechanics() {
                     </td>
                   )}
                   <td className="p-4 text-foreground font-medium">{m.businessName || m.name}</td>
-                  <td className="p-4 text-muted-foreground">{m.phone?.[0]?.number || 'N/A'}</td>
+                  <td className="p-4 text-muted-foreground">{formatPhoneDisplay(m.phone)}</td>
                   <td className="p-4 text-muted-foreground">{m.city || 'N/A'}</td>
                   <td className="p-4">
                     <span className={`px-2 py-1 rounded text-xs font-bold ${

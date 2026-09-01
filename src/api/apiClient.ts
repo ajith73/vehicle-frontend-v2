@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+export const AUTH_STATE_CHANGED_EVENT = 'roadresq:auth-state-changed';
 
 const axiosInstance = axios.create({
   baseURL: API_URL,
@@ -29,6 +30,7 @@ axiosInstance.interceptors.response.use((response) => {
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('role');
     localStorage.removeItem('mechanicId');
+    window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGED_EVENT));
   };
 
   const handleAuthRedirect = () => {
@@ -68,6 +70,7 @@ axiosInstance.interceptors.response.use((response) => {
         
         localStorage.setItem('token', token);
         localStorage.setItem('refreshToken', newRefreshToken);
+        window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGED_EVENT));
         
         // Update the original request's authorization header and retry it
         originalRequest.headers['Authorization'] = `Bearer ${token}`;

@@ -11,6 +11,10 @@ const rowVariants = {
 };
 
 const formatTime = (value?: string) => value ? new Date(value).toLocaleString() : 'N/A';
+const truncateText = (value?: string, max = 38) => {
+  if (!value) return 'Unknown';
+  return value.length > max ? `${value.slice(0, max).trimEnd()}...` : value;
+};
 
 const statusTone = (status?: string) => {
   if (!status) return 'bg-secondary text-foreground';
@@ -199,7 +203,11 @@ export default function AdminRequestsHub() {
                     <td className="p-4 text-sm font-medium">{request.CustomerUser?.CustomerProfile?.displayName || request.CustomerUser?.email || 'Unknown'}</td>
                     <td className="p-4 text-sm text-muted-foreground">{request.ServiceType?.name || request.issueSummary}</td>
                     <td className="p-4 text-sm text-muted-foreground">{request.Mechanic?.businessName || request.Mechanic?.name || 'Unassigned'}</td>
-                    <td className="p-4 text-sm text-muted-foreground">{request.Mechanic?.city || request.addressText || 'Unknown'}</td>
+                    <td className="p-4 text-sm text-muted-foreground max-w-[18rem]">
+                      <span className="block truncate" title={request.Mechanic?.city || request.addressText || 'Unknown'}>
+                        {truncateText(request.Mechanic?.city || request.addressText || 'Unknown')}
+                      </span>
+                    </td>
                     <td className="p-4">
                       <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded ${statusTone(request.status)}`}>
                         {request.status}

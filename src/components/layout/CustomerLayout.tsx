@@ -9,6 +9,7 @@ export default function CustomerLayout() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const isCustomerRequestFlow = location.pathname === '/customer/request';
 
   useEffect(() => {
     setIsLoggedIn(localStorage.getItem('role') === 'Customer' && !!localStorage.getItem('token'));
@@ -26,7 +27,7 @@ export default function CustomerLayout() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 pb-[72px] sm:pb-0">
+    <div className={`min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 ${isCustomerRequestFlow ? 'pb-0' : 'pb-[72px] sm:pb-0'}`}>
       <header className="hidden sm:block sticky top-0 z-50 p-4 border-b border-border bg-background/80 backdrop-blur-md shadow-sm">
         <div className="max-w-7xl mx-auto flex justify-between items-center w-full">
           <Link to="/customer" className="flex items-center gap-2 text-xl font-black hover:scale-105 transition-transform">
@@ -88,7 +89,7 @@ export default function CustomerLayout() {
         <Outlet />
       </main>
 
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-safe">
+      <nav className={`${isCustomerRequestFlow ? 'hidden' : 'sm:hidden fixed'} bottom-0 left-0 right-0 z-50 bg-card border-t border-border shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-safe`}>
         <div className="flex justify-around items-center h-[72px]">
           <Link to="/customer" className={`flex flex-col items-center gap-1 p-2 ${location.pathname === '/customer' ? 'text-primary' : 'text-muted-foreground'}`}>
             <MapIcon className={`w-6 h-6 ${location.pathname === '/customer' ? 'fill-primary/20' : ''}`} />

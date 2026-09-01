@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Navigation, TrendingUp, AlertTriangle, X, Power, Loader2, Star, Bell, Clock3 } from 'lucide-react';
+import { MapPin, Navigation, TrendingUp, AlertTriangle, X, Power, Loader2, Star, Bell, Clock3, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { openRealtimeStream } from '../../api/realtime';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,6 +17,9 @@ export default function PartnerDashboard() {
   const [incomingRequest, setIncomingRequest] = useState<any>(null);
   const [performance, setPerformance] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [connectionLost, setConnectionLost] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<'accept' | 'reject' | null>(null);
 
   const syncIncomingRequest = (jobsRes: any[]) => {
     const incoming = (jobsRes || []).find((job) => job.status === 'ASSIGNED');
@@ -73,13 +76,13 @@ export default function PartnerDashboard() {
         if (closed) return;
         setJobs(jobsRes || []);
         syncIncomingRequest(jobsRes || []);
-        if (jobsRes && jobsRes.length > 0 && jobsRes[0].Mechanic) {
-          setIsOnline(jobsRes[0].Mechanic.isOnline);
-        }
+        setConnectionLost(false);
+        setLastUpdatedAt(new Date().toISOString());
         setLoading(false);
       },
       onError: () => {
         if (!closed) {
+          setConnectionLost(true);
           fetchJobsData();
         }
       }
@@ -119,10 +122,7 @@ export default function PartnerDashboard() {
         setProfile(profileRes);
         applyProfileLiveState(profileRes);
       }
-
-      if (jobsRes && jobsRes.length > 0 && jobsRes[0].Mechanic) {
-        setIsOnline(jobsRes[0].Mechanic.isOnline);
-      }
+      setLastUpdatedAt(new Date().toISOString());
     } catch (err) {
       console.error("Failed to fetch partner dashboard", err);
     } finally {
@@ -156,12 +156,60 @@ export default function PartnerDashboard() {
   const completedJobs = jobs.filter(j => j.status === 'SERVICE_COMPLETED').length;
   const liveNotifications = jobs.filter(j => ['ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED'].includes(j.status)).length;
   const availableJobs = jobs.filter(j => j.status === 'ASSIGNED').length;
+  const lastUpdatedLabel = useMemo(
+    () => (lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleTimeString('en-IN') : null),
+    [lastUpdatedAt]
+  );
   const areaDemandTitle = availableJobs > 0 ? 'Requests Waiting Nearby' : isOnline ? 'Coverage Active' : 'Go Online For Demand';
   const areaDemandSubtitle = availableJobs > 0
     ? `${availableJobs} request${availableJobs > 1 ? 's are' : ' is'} waiting for partner response`
     : isOnline
       ? `${liveNotifications} live dispatch update${liveNotifications === 1 ? '' : 's'} in your current feed`
       : 'Turn on availability to receive nearby requests';
+  const nextActionTitle = currentJob
+    ? `Continue ${String(currentJob.status || '').replace(/_/g, ' ').toLowerCase()}`
+    : availableJobs > 0
+      ? 'Review the latest incoming request'
+      : isOnline
+        ? 'Stay online for nearby dispatch'
+        : 'Go online to receive requests';
+  const nextActionDescription = currentJob
+    ? 'Open the active job and continue the next required service step.'
+    : availableJobs > 0
+      ? 'A customer request is waiting for your response.'
+      : isOnline
+        ? 'We will keep listening for nearby jobs and refresh this dashboard live.'
+        : 'You will not receive customer jobs while your availability is offline.';
+
+  const handleIncomingReject = async () => {
+    if (!incomingRequest?.id) return;
+    setActionLoading('reject');
+    try {
+      await apiClient(`/mechanic/jobs/${incomingRequest.id}/reject`, { method: 'POST', data: { reason: 'Busy' } });
+      toast.success('Request rejected');
+      setShowIncoming(false);
+      await fetchJobsData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reject request');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleIncomingAccept = async () => {
+    if (!incomingRequest?.id) return;
+    setActionLoading('accept');
+    try {
+      await apiClient(`/mechanic/jobs/${incomingRequest.id}/accept`, { method: 'POST' });
+      toast.success('Request accepted');
+      setShowIncoming(false);
+      window.location.href = `/partner/request/${incomingRequest.id}`;
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to accept request');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-full bg-background p-4 max-w-lg mx-auto pb-32">
@@ -177,6 +225,18 @@ export default function PartnerDashboard() {
           {isOnline ? 'ONLINE' : 'OFFLINE'}
         </button>
       </div>
+
+      {connectionLost ? (
+        <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-700 dark:text-amber-400">
+          Connection lost. Reconnecting to live dispatch...
+          {lastUpdatedLabel ? ` Last updated ${lastUpdatedLabel}.` : ''}
+        </div>
+      ) : lastUpdatedLabel ? (
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Last updated {lastUpdatedLabel}
+        </div>
+      ) : null}
 
       {/* Earnings Summary */}
       <motion.div initial={{ y: 20 }} animate={{ y: 0 }} className="bg-primary text-primary-foreground rounded-[2rem] p-6 shadow-[0_10px_30px_rgba(var(--primary),0.3)] mb-6 relative overflow-hidden">
@@ -296,6 +356,33 @@ export default function PartnerDashboard() {
         </Link>
       </div>
 
+      <div className="mt-6 rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-primary">What happens next</p>
+        <h3 className="mt-2 text-lg font-black text-foreground">{nextActionTitle}</h3>
+        <p className="mt-2 text-sm text-muted-foreground">{nextActionDescription}</p>
+        <div className="mt-4">
+          {currentJob ? (
+            <Link to={`/partner/request/${currentJob.id}`} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground">
+              <Navigation className="w-4 h-4" /> Open Active Job
+            </Link>
+          ) : availableJobs > 0 && incomingRequest ? (
+            <button
+              onClick={() => setShowIncoming(true)}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground"
+            >
+              <AlertTriangle className="w-4 h-4" /> Review Incoming Request
+            </button>
+          ) : (
+            <button
+              onClick={toggleOnline}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-secondary px-4 py-3 text-sm font-bold text-secondary-foreground"
+            >
+              <Power className="w-4 h-4" /> {isOnline ? 'Stay Online' : 'Go Online'}
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* INCOMING REQUEST MODAL */}
       <AnimatePresence>
         {showIncoming && incomingRequest && (
@@ -309,13 +396,24 @@ export default function PartnerDashboard() {
             >
               
               {/* Map Header */}
-              <div className="h-40 bg-secondary relative">
-                <div className="absolute inset-0 bg-[url('https://maps.googleapis.com/maps/api/staticmap?center=11.0168,76.9558&zoom=14&size=400x200&sensor=false&key=')] bg-cover opacity-60 mix-blend-luminosity grayscale"></div>
-                <div className="absolute top-4 left-4 bg-background/90 backdrop-blur px-3 py-1 rounded-full text-xs font-black text-primary border border-primary/20 shadow-sm animate-pulse">
-                  NEW REQUEST
+              <div className="relative h-40 overflow-hidden bg-gradient-to-br from-primary/15 via-background to-secondary">
+                <div className="absolute inset-0 opacity-70">
+                  <div className="absolute left-10 top-16 h-20 w-20 rounded-full bg-primary/20 blur-2xl" />
+                  <div className="absolute right-8 bottom-8 h-24 w-24 rounded-full bg-emerald-500/20 blur-2xl" />
                 </div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                  <MapPin className="w-10 h-10 -mt-10 text-primary drop-shadow-md animate-bounce" />
+                <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-3">
+                  <div className="bg-background/90 backdrop-blur px-3 py-1 rounded-full text-xs font-black text-primary border border-primary/20 shadow-sm animate-pulse">
+                    NEW REQUEST
+                  </div>
+                  <div className="rounded-full bg-background/85 px-3 py-1 text-[11px] font-bold text-foreground shadow-sm">
+                    {incomingRequest.currentEtaMinutes || '--'} min ETA
+                  </div>
+                </div>
+                <div className="absolute inset-x-4 bottom-5">
+                  <div className="flex items-center gap-2 rounded-full bg-background/92 px-4 py-2 text-xs font-bold text-foreground shadow-md">
+                    <MapPin className="w-4 h-4 shrink-0 text-primary" />
+                    <span className="truncate">{incomingRequest.addressText || 'Customer location available'}</span>
+                  </div>
                 </div>
               </div>
 
@@ -336,26 +434,21 @@ export default function PartnerDashboard() {
 
                 <div className="flex gap-3">
                   <button 
-                    onClick={async () => {
-                      await apiClient(`/mechanic/jobs/${incomingRequest.id}/reject`, { method: 'POST', data: { reason: 'Busy' } });
-                      setShowIncoming(false);
-                      fetchJobsData();
-                    }}
-                    className="flex-1 bg-secondary text-secondary-foreground font-bold p-4 rounded-xl flex items-center justify-center hover:bg-secondary/80 transition-colors border border-border"
+                    onClick={handleIncomingReject}
+                    disabled={actionLoading !== null}
+                    className="flex-1 bg-secondary text-secondary-foreground font-bold p-4 rounded-xl flex items-center justify-center hover:bg-secondary/80 transition-colors border border-border disabled:opacity-60"
                   >
-                    <X className="w-5 h-5 mr-2" /> Reject
+                    {actionLoading === 'reject' ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <X className="w-5 h-5 mr-2" />} Reject
                   </button>
                   <Link 
                     to={`/partner/request/${incomingRequest.id}`}
                     onClick={async (e) => {
                       e.preventDefault();
-                      await apiClient(`/mechanic/jobs/${incomingRequest.id}/accept`, { method: 'POST' });
-                      setShowIncoming(false);
-                      window.location.href = `/partner/request/${incomingRequest.id}`;
+                      await handleIncomingAccept();
                     }}
                     className="flex-[2] bg-primary text-primary-foreground font-black p-4 rounded-xl flex items-center justify-center hover:opacity-90 shadow-[0_8px_20px_rgba(var(--primary),0.3)] transition-transform hover:-translate-y-1"
                   >
-                    ACCEPT
+                    {actionLoading === 'accept' ? <Loader2 className="w-5 h-5 animate-spin" /> : 'ACCEPT'}
                   </Link>
                 </div>
 

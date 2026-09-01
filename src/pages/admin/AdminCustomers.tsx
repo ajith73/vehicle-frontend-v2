@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '../../api/apiClient';
 import type { AdminCustomerRecord } from '../../types';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { formatPhoneDisplay } from '../../utils/phone';
 
 export default function AdminCustomers() {
   const [customers, setCustomers] = useState<AdminCustomerRecord[]>([]);
@@ -37,7 +38,7 @@ export default function AdminCustomers() {
 
   const filteredCustomers = useMemo(() => {
     return customers.filter((customer) => {
-      const text = `${customer.displayName} ${customer.email} ${customer.phone || ''} ${customer.city || ''}`.toLowerCase();
+      const text = `${customer.displayName} ${customer.email} ${formatPhoneDisplay(customer.phone, '')} ${customer.city || ''}`.toLowerCase();
       const matchesQuery = !query || text.includes(query.toLowerCase());
       const customerStatus = customer.subscriptionStatus || 'BASIC';
       const matchesStatus = statusFilter === 'ALL' || customerStatus === statusFilter;
@@ -150,7 +151,7 @@ export default function AdminCustomers() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <p className="text-sm font-medium flex items-center gap-1 mb-0.5"><Phone className="w-3 h-3 text-muted-foreground" /> {customer.phone || 'No phone'}</p>
+                      <p className="text-sm font-medium flex items-center gap-1 mb-0.5"><Phone className="w-3 h-3 text-muted-foreground" /> {formatPhoneDisplay(customer.phone, 'No phone')}</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> {customer.email}</p>
                     </td>
                     <td className="p-4 text-sm font-medium">

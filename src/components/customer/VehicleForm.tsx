@@ -106,9 +106,10 @@ interface VehicleFormProps {
   onSubmit: (data: VehicleData) => Promise<void>;
   onCancel?: () => void;
   loading?: boolean;
+  submitLabel?: string;
 }
 
-export function VehicleForm({ initialData, onSubmit, onCancel, loading = false }: VehicleFormProps) {
+export function VehicleForm({ initialData, onSubmit, onCancel, loading = false, submitLabel = 'Save Vehicle' }: VehicleFormProps) {
   const [formData, setFormData] = useState<VehicleData>({
     id: initialData?.id || '',
     make: initialData?.make || '',
@@ -117,11 +118,49 @@ export function VehicleForm({ initialData, onSubmit, onCancel, loading = false }
     fuelType: initialData?.fuelType || 'Petrol',
     type: initialData?.type || 'Car'
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const setFieldValue = (field: keyof VehicleData, value: string) => {
+    setFormData((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const validateVehicle = () => {
+    const nextErrors: Record<string, string> = {};
+
+    if (!formData.make.trim()) {
+      nextErrors.make = 'Select or type the vehicle brand';
+    }
+    if (!formData.model.trim()) {
+      nextErrors.model = 'Select or type the vehicle model';
+    }
+    if (!formData.plate.trim()) {
+      nextErrors.plate = 'Enter the vehicle registration number';
+    } else if (formData.plate.replace(/[^A-Z0-9]/g, '').length < 6) {
+      nextErrors.plate = 'Enter a valid registration number';
+    }
+
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateVehicle()) return;
     await onSubmit(formData);
   };
+
+  const getFieldClassName = (field: string) =>
+    `w-full rounded-xl border p-3 outline-none transition-colors ${
+      fieldErrors[field]
+        ? 'border-red-500 bg-red-500/5 focus:border-red-500'
+        : 'border-border bg-secondary focus:border-primary'
+    }`;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -130,43 +169,43 @@ export function VehicleForm({ initialData, onSubmit, onCancel, loading = false }
         <CreatableSelect
           options={formData.type.includes('Bike') ? bikeMakeOptions : carMakeOptions}
           value={formData.make ? { value: formData.make, label: formData.make } : null}
-          onChange={(newValue: any) => setFormData({ ...formData, make: newValue?.value || '' })}
+          onChange={(newValue: any) => setFieldValue('make', newValue?.value || '')}
           placeholder="Select or type brand..."
           styles={selectStyles}
           classNamePrefix="vehicle-select"
           isClearable
-          required
         />
+        {fieldErrors.make ? <p className="mt-1 text-xs font-semibold text-red-500">{fieldErrors.make}</p> : null}
       </div>
       <div>
         <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Model</label>
         <CreatableSelect
           options={formData.type.includes('Bike') ? bikeModelOptions : carModelOptions}
           value={formData.model ? { value: formData.model, label: formData.model } : null}
-          onChange={(newValue: any) => setFormData({ ...formData, model: newValue?.value || '' })}
+          onChange={(newValue: any) => setFieldValue('model', newValue?.value || '')}
           placeholder="Select or type model..."
           styles={selectStyles}
           classNamePrefix="vehicle-select"
           isClearable
-          required
         />
+        {fieldErrors.model ? <p className="mt-1 text-xs font-semibold text-red-500">{fieldErrors.model}</p> : null}
       </div>
       <div>
         <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">License Plate</label>
         <input 
-          required 
           type="text" 
           value={formData.plate} 
-          onChange={e => setFormData({...formData, plate: e.target.value.toUpperCase()})} 
-          className="w-full bg-secondary p-3 rounded-xl border border-border focus:border-primary outline-none uppercase" 
+          onChange={e => setFieldValue('plate', e.target.value.toUpperCase())} 
+          className={`${getFieldClassName('plate')} uppercase`} 
           placeholder="e.g. TN 38 BX 1234" 
         />
+        {fieldErrors.plate ? <p className="mt-1 text-xs font-semibold text-red-500">{fieldErrors.plate}</p> : null}
       </div>
       
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Fuel Type</label>
-          <select value={formData.fuelType} onChange={e => setFormData({...formData, fuelType: e.target.value})} className="w-full bg-secondary p-3 rounded-xl border border-border focus:border-primary outline-none">
+          <select value={formData.fuelType} onChange={e => setFieldValue('fuelType', e.target.value)} className={getFieldClassName('fuelType')}>
             <option>Petrol</option>
             <option>Diesel</option>
             <option>EV</option>
@@ -176,7 +215,7 @@ export function VehicleForm({ initialData, onSubmit, onCancel, loading = false }
         </div>
         <div>
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Type</label>
-          <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full bg-secondary p-3 rounded-xl border border-border focus:border-primary outline-none">
+          <select value={formData.type} onChange={e => setFieldValue('type', e.target.value)} className={getFieldClassName('type')}>
             <option>Car</option>
             <option>Bike/Scooter</option>
             <option>SUV</option>
@@ -190,7 +229,7 @@ export function VehicleForm({ initialData, onSubmit, onCancel, loading = false }
         disabled={loading}
         className="w-full bg-primary text-primary-foreground font-bold p-4 rounded-xl mt-4 shadow-md hover:opacity-90 flex items-center justify-center gap-2"
       >
-        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save Vehicle'}
+        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : submitLabel}
       </button>
       
       {onCancel && (

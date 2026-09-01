@@ -3,10 +3,10 @@ import { MapPin, Plus, Star, MoreVertical, Loader2, X, Trash2 } from 'lucide-rea
 import { apiClient } from '../../api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { useDataContext } from '../../contexts/DataContext';
 
 export default function CustomerSavedLocationsPage() {
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { customerProfile, isLoadingCustomerProfile, refreshCustomerProfile } = useDataContext();
   const [showForm, setShowForm] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -16,22 +16,7 @@ export default function CustomerSavedLocationsPage() {
     type: 'Home' // Home, Office, Other
   });
 
-  const fetchProfile = async () => {
-    setLoading(true);
-    try {
-      const data = await apiClient<any>('/customer/profile');
-      setProfile(data.profile);
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to load locations');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  const profile = customerProfile;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +40,7 @@ export default function CustomerSavedLocationsPage() {
       
       toast.success('Location saved!');
       setShowForm(false);
-      fetchProfile();
+      await refreshCustomerProfile();
     } catch (err) {
       toast.error('Failed to save location');
     }
@@ -73,7 +58,7 @@ export default function CustomerSavedLocationsPage() {
       });
       
       toast.success('Location removed');
-      fetchProfile();
+      await refreshCustomerProfile();
     } catch (err) {
       toast.error('Failed to remove location');
     }
@@ -104,6 +89,10 @@ export default function CustomerSavedLocationsPage() {
     }
   };
 
+  useEffect(() => {
+    void refreshCustomerProfile();
+  }, [refreshCustomerProfile]);
+
   return (
     <div className="flex flex-col h-[100dvh] bg-background">
       <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-md border-b border-border p-4 flex justify-between items-center shadow-sm">
@@ -116,7 +105,7 @@ export default function CustomerSavedLocationsPage() {
       </header>
       
       <main className="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full pb-32 flex flex-col gap-3">
-        {loading ? (
+        {isLoadingCustomerProfile ? (
           <div className="flex justify-center py-12">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>

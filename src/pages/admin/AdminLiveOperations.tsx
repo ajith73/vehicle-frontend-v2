@@ -5,9 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { getRequestStatusMeta, getRequestToneClasses, isSearchingRequestStatus } from '../../lib/requestLifecycle';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { openRealtimeStream } from '../../api/realtime';
+import { formatPhoneDisplay } from '../../utils/phone';
+import { useNavigate } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 
 export default function AdminLiveOperations() {
+  const navigate = useNavigate();
   const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
   const [mechanics, setMechanics] = useState<any[]>([]);
@@ -15,9 +19,38 @@ export default function AdminLiveOperations() {
   const [filter, setFilter] = useState('');
 
   useEffect(() => {
-    fetchLiveData();
-    const interval = setInterval(fetchLiveData, 15000);
-    return () => clearInterval(interval);
+    let mounted = true;
+
+    const loadInitial = async () => {
+      await fetchLiveData();
+      if (mounted) {
+        setLoading(false);
+      }
+    };
+
+    loadInitial();
+
+    const closeRequestsStream = openRealtimeStream<any[]>('/admin/live/requests', {
+      event: 'admin:live-requests:update',
+      onMessage: (payload) => {
+        setRequests(Array.isArray(payload) ? payload : []);
+        setLoading(false);
+      }
+    });
+
+    const closeMechanicsStream = openRealtimeStream<any[]>('/admin/live/mechanics', {
+      event: 'admin:live-mechanics:update',
+      onMessage: (payload) => {
+        setMechanics(Array.isArray(payload) ? payload : []);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      closeRequestsStream();
+      closeMechanicsStream();
+    };
   }, []);
 
   const fetchLiveData = async () => {
@@ -30,8 +63,6 @@ export default function AdminLiveOperations() {
       setMechanics(mechs || []);
     } catch (error) {
       console.error('Failed to fetch live data:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -68,13 +99,14 @@ export default function AdminLiveOperations() {
 
   const entityDetails = getEntityDetails();
 
-  // Simple mock distribution of map pins since we don't have a real map renderer
-  const getMapPosition = (index: number, total: number, isMech: boolean) => {
-    // Generate pseudo-random but stable positions
-    const seed = index * 137 + (isMech ? 1 : 0);
-    const top = 20 + (seed % 60); // 20% to 80%
-    const left = 10 + ((seed * 7) % 80); // 10% to 90%
-    return { top: `${top}%`, left: `${left}%` };
+  const handleManualDispatch = () => {
+    if (entityDetails?.type !== 'request') return;
+    navigate('/admin/v2/dispatch', {
+      state: {
+        selectedRequestId: entityDetails.data.id,
+        source: 'live-ops'
+      }
+    });
   };
 
   if (loading && requests.length === 0) {
@@ -110,8 +142,8 @@ export default function AdminLiveOperations() {
       <div className="flex-1 bg-secondary relative overflow-hidden z-0">
          <MapContainer center={[11.0168, 76.9558]} zoom={13} className="w-full h-full">
            <TileLayer
-             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+             attribution="&copy; OpenStreetMap contributors"
+             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
            />
            {requests.filter(r => !filter || String(r.id).includes(filter) || r.CustomerUser?.CustomerProfile?.displayName?.toLowerCase().includes(filter.toLowerCase())).map((req) => {
              const lat = req.latitude || 11.0168 + (Math.random() - 0.5) * 0.05;
@@ -199,7 +231,7 @@ export default function AdminLiveOperations() {
                <div className="border-t border-border pt-4">
                  <h4 className="font-bold text-sm mb-3">Admin Actions</h4>
                  <div className="flex flex-col gap-2">
-                   <button className="w-full bg-primary text-primary-foreground font-bold p-3 rounded-lg shadow text-sm hover:opacity-90 transition-opacity">
+                   <button onClick={handleManualDispatch} className="w-full bg-primary text-primary-foreground font-bold p-3 rounded-lg shadow text-sm hover:opacity-90 transition-opacity">
                      Dispatch Manually
                    </button>
                    <button onClick={() => handleCancelRequest(entityDetails.data.id)} className="w-full text-destructive font-bold p-3 rounded-lg border border-destructive/20 bg-destructive/5 text-sm hover:bg-destructive/10 transition-colors">
@@ -228,7 +260,7 @@ export default function AdminLiveOperations() {
                      <div className="flex items-center gap-3">
                        <div className="w-8 h-8 bg-emerald-500/10 rounded-full flex items-center justify-center"><Phone className="w-4 h-4 text-emerald-500" /></div>
                        <div>
-                         <p className="text-sm font-bold">{entityDetails.data.phone || 'N/A'}</p>
+                         <p className="text-sm font-bold">{formatPhoneDisplay(entityDetails.data.phone)}</p>
                        </div>
                      </div>
                    </div>

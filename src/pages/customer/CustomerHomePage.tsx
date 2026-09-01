@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, Navigation, AlertTriangle, Truck, Wrench, Car, Clock, Loader2, Crown, ShieldCheck, Bell, LifeBuoy, Zap, ChevronUp, ChevronDown } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
@@ -9,50 +9,56 @@ import { useDataContext } from '../../contexts/DataContext';
 import { LocationPopup } from '../../components/shared/LocationPopup';
 import { MapLocationPicker } from '../../components/MapLocationPicker';
 import { SERVICE_IMAGES, DEFAULT_SERVICE_IMAGE } from '../../utils/serviceImages';
+import { QuickServicesSection } from '../../components/customer/QuickServicesSection';
 
 export default function CustomerHomePage() {
-  const [profile, setProfile] = useState<any>(null);
   const [activeRequest, setActiveRequest] = useState<any>(null);
   const [recentRequests, setRecentRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLocationPopup, setShowLocationPopup] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   
   const navigate = useNavigate();
   const { locationName, locationSource, requestLocation, setLocation, isLoading: locationLoading, locationMessage } = useLocationContext();
-  const { services, customerProfile } = useDataContext();
+  const { services, customerProfile, isLoadingCustomerProfile, isLoadingData, refreshCustomerProfile } = useDataContext();
+  const locationSummary = useMemo(() => {
+    const value = locationLoading ? 'Detecting your location...' : locationName;
+    return String(value || '').trim() || 'Choose your location';
+  }, [locationLoading, locationName]);
+  const isCustomerLoggedIn = useMemo(
+    () => localStorage.getItem('role') === 'Customer' && !!localStorage.getItem('token'),
+    []
+  );
 
   useEffect(() => {
     const fetchData = async () => {
+      setHistoryLoading(true);
       try {
-        const isCustomerLoggedIn = localStorage.getItem('role') === 'Customer' && !!localStorage.getItem('token');
         const historyData = isCustomerLoggedIn
           ? await apiClient<any[]>('/customer/requests/history').catch(() => [])
           : [];
-        
-        if (customerProfile) {
-          setProfile(customerProfile);
-        } else {
-          setProfile(null);
-        }
-        
+
         if (historyData?.length > 0) {
           const active = historyData.find((r: any) => !['SERVICE_COMPLETED', 'CANCELLED_BY_CUSTOMER', 'CANCELLED_BY_ADMIN', 'SERVICE_CANCELLED'].includes(r.status));
           setActiveRequest(active);
           setRecentRequests(historyData.filter((r: any) => r.status === 'SERVICE_COMPLETED').slice(0, 3));
+        } else {
+          setActiveRequest(null);
+          setRecentRequests([]);
         }
       } catch (error) {
         console.error('Failed to load dashboard data', error);
       } finally {
-        setLoading(false);
+        setHistoryLoading(false);
       }
     };
-    
+
+    void refreshCustomerProfile();
     fetchData();
-    setIsLoggedIn(localStorage.getItem('role') === 'Customer' && !!localStorage.getItem('token'));
-  }, [customerProfile]);
+    setIsLoggedIn(isCustomerLoggedIn);
+  }, [isCustomerLoggedIn, refreshCustomerProfile]);
 
   useEffect(() => {
      if (!locationLoading && (locationSource === 'none' || locationName === 'Current Location')) {
@@ -75,7 +81,7 @@ export default function CustomerHomePage() {
     }
   };
 
-  if (loading) {
+  if (historyLoading || (isLoggedIn && (isLoadingCustomerProfile || isLoadingData))) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)]">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -84,13 +90,13 @@ export default function CustomerHomePage() {
     );
   }
 
-  const defaultVehicle = profile?.savedVehicles?.[0];
+  const defaultVehicle = customerProfile?.savedVehicles?.[0];
 
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-6 p-4 pb-24 max-w-lg mx-auto w-full"
+      className="mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-x-hidden p-4 pb-24"
     >
       <LocationPopup 
         isOpen={showLocationPopup} 
@@ -110,19 +116,19 @@ export default function CustomerHomePage() {
         />
       )}
 
-      <section className="flex gap-4">
-        <div className="flex-1 bg-card/80 backdrop-blur-md border border-border/50 rounded-2xl p-4 shadow-sm flex items-center justify-between transition-all hover:shadow-md cursor-pointer" onClick={() => setShowLocationPopup(true)}>
+      <section className="flex gap-4 overflow-x-hidden">
+        <div className="flex min-w-0 flex-1 cursor-pointer items-center justify-between rounded-2xl border border-border/50 bg-card/80 p-4 shadow-sm backdrop-blur-md transition-all hover:shadow-md" onClick={() => setShowLocationPopup(true)}>
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
               {locationLoading ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <MapPin className="w-5 h-5 text-primary" />}
             </div>
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Location</p>
-              <p className="text-sm font-bold text-foreground truncate">
-                {locationLoading ? 'Detecting your location...' : locationName}
+              <p className="max-w-[10rem] truncate text-sm font-bold text-foreground sm:max-w-[14rem]" title={locationSummary}>
+                {locationSummary}
               </p>
               {locationMessage ? (
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{locationMessage}</p>
+                <p className="mt-0.5 max-w-[10rem] truncate text-[11px] text-muted-foreground sm:max-w-[14rem]" title={locationMessage}>{locationMessage}</p>
               ) : null}
             </div>
           </div>
@@ -131,7 +137,7 @@ export default function CustomerHomePage() {
         <Link 
           onClick={(e) => handleProtectedAction(e, '/customer/vehicles')} 
           to="/customer/vehicles" 
-          className="flex-1 bg-card/80 backdrop-blur-md border border-border/50 rounded-2xl p-4 shadow-sm flex items-center gap-3 transition-all hover:shadow-md hover:border-primary/30"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-border/50 bg-card/80 p-4 shadow-sm backdrop-blur-md transition-all hover:border-primary/30 hover:shadow-md"
         >
           <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center shrink-0">
             <Car className="w-5 h-5 text-primary" />
@@ -197,62 +203,12 @@ export default function CustomerHomePage() {
         </motion.section>
       )}
 
-      <section>
-        <h2 className="text-lg font-black text-foreground mb-4">Quick Services</h2>
-        <div className="flex snap-x gap-2 overflow-x-auto pb-2 hide-scrollbar sm:grid sm:grid-cols-5 sm:gap-3 md:grid-cols-7">
-          {!services ? (
-            Array(7).fill(0).map((_, i) => (
-              <div key={i} className="h-20 w-24 shrink-0 rounded-2xl border-2 border-border/50 bg-secondary/50 animate-pulse sm:h-24 sm:w-full"></div>
-            ))
-          ) : (
-            <>
-              <button
-                onClick={(e) => {
-                  handleProtectedAction(e as any, '/customer/request');
-                  navigate('/customer/request');
-                }}
-                className="flex h-32 w-28 sm:h-36 sm:w-full snap-start flex-none flex-col items-center justify-center gap-2 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/40 transition-all active:scale-95 hover:scale-[1.02] hover:border-primary/50 hover:bg-card hover:shadow-md group text-center"
-              >
-                <div className="flex items-center justify-center p-2 group-hover:scale-110 transition-transform text-primary">
-                  <Zap className="h-8 w-8 text-current" />
-                </div>
-                <span className="px-1 text-center text-[11px] sm:text-xs font-bold text-foreground">All Services</span>
-              </button>
-              {services
-                .filter((service) => showAllServices || service.isFeatured || (!showAllServices && services.every((item) => !item.isFeatured)))
-                .map((service) => {
-                  const imageSrc = SERVICE_IMAGES[service.name] || service.imageUrl || DEFAULT_SERVICE_IMAGE;
-                  return (
-                    <button
-                      key={service.name}
-                      onClick={(e) => {
-                        handleProtectedAction(e as any, '/customer/request');
-                        navigate(`/customer/request?service=${service.name}`);
-                      }}
-                      className="flex h-32 w-28 sm:h-36 sm:w-full snap-start flex-none flex-col items-center justify-center gap-2 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/40 transition-all active:scale-95 hover:scale-[1.02] hover:border-primary/50 hover:bg-card hover:shadow-md group text-center"
-                    >
-                      <div className="flex items-center justify-center p-2 group-hover:scale-110 transition-transform">
-                        <img src={imageSrc} alt={service.name} className="w-12 h-12 object-contain" />
-                      </div>
-                      <span className="px-1 text-center text-[11px] sm:text-xs font-bold text-foreground line-clamp-2 leading-tight">{service.name}</span>
-                    </button>
-                  );
-                })}
-              {services.some((service) => service.isFeatured) && services.some((service) => !service.isFeatured) && (
-                <button
-                  onClick={() => setShowAllServices(!showAllServices)}
-                  className="flex h-32 w-28 sm:h-36 sm:w-full snap-start flex-none flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border/40 bg-transparent text-muted-foreground transition-all hover:border-primary/50 hover:text-primary active:scale-95"
-                >
-                  <div className="flex items-center justify-center">
-                    {showAllServices ? <ChevronUp className="h-8 w-8" /> : <ChevronDown className="h-8 w-8" />}
-                  </div>
-                  <span className="px-1 text-center text-[11px] sm:text-xs font-bold leading-tight">{showAllServices ? 'Show Less' : 'Show More'}</span>
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      </section>
+      <QuickServicesSection
+        showAllServices={showAllServices}
+        setShowAllServices={setShowAllServices}
+        handleProtectedAction={handleProtectedAction}
+        navigate={navigate}
+      />
 
       {recentRequests.length > 0 && (
         <section>
@@ -267,7 +223,7 @@ export default function CustomerHomePage() {
                   <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
                     <Wrench className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-bold text-foreground">{req.ServiceType?.name || 'General Service'}</p>
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><Clock className="w-3 h-3" /> {new Date(req.createdAt).toLocaleDateString()}</p>
                   </div>

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { apiClient } from '../../api/apiClient';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { Mechanic } from '../../types';
+import { formatPhoneDisplay } from '../../utils/phone';
 
 export default function AdminPartners() {
   const [partners, setPartners] = useState<Mechanic[]>([]);
@@ -35,7 +36,7 @@ export default function AdminPartners() {
 
   const filteredPartners = useMemo(() => {
     return partners.filter((partner) => {
-      const text = `${partner.businessName || partner.name || ''} ${partner.phone || ''} ${partner.city || ''}`.toLowerCase();
+      const text = `${partner.businessName || partner.name || ''} ${formatPhoneDisplay(partner.phone, '')} ${partner.city || ''}`.toLowerCase();
       const matchesQuery = !query || text.includes(query.toLowerCase());
       const matchesStatus = statusFilter === 'ALL' || partner.status === statusFilter;
       return matchesQuery && matchesStatus;
@@ -202,7 +203,7 @@ export default function AdminPartners() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <p className="text-sm font-medium flex items-center gap-1 mb-0.5"><Phone className="w-3 h-3 text-muted-foreground" /> {Array.isArray(partner.phone) ? partner.phone[0]?.number : String(partner.phone || 'No phone')}</p>
+                      <p className="text-sm font-medium flex items-center gap-1 mb-0.5"><Phone className="w-3 h-3 text-muted-foreground" /> {formatPhoneDisplay(partner.phone, 'No phone')}</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                         <MapPin className="w-3 h-3" /> {partner.city || 'Unknown city'}
                       </p>
