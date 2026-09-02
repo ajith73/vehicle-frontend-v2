@@ -22,7 +22,7 @@ export default function CustomerHomePage() {
   
   const navigate = useNavigate();
   const { locationName, locationSource, requestLocation, setLocation, isLoading: locationLoading, locationMessage } = useLocationContext();
-  const { services, customerProfile, isLoadingCustomerProfile, isLoadingData, refreshCustomerProfile } = useDataContext();
+  const { services, customerProfile, isLoadingCustomerProfile, isLoadingData } = useDataContext();
   const locationSummary = useMemo(() => {
     const value = locationLoading ? 'Detecting your location...' : locationName;
     return String(value || '').trim() || 'Choose your location';
@@ -55,10 +55,9 @@ export default function CustomerHomePage() {
       }
     };
 
-    void refreshCustomerProfile();
     fetchData();
     setIsLoggedIn(isCustomerLoggedIn);
-  }, [isCustomerLoggedIn, refreshCustomerProfile]);
+  }, [isCustomerLoggedIn]);
 
   useEffect(() => {
      if (!locationLoading && (locationSource === 'none' || locationName === 'Current Location')) {

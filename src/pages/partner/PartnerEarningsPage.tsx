@@ -75,7 +75,7 @@ export default function PartnerEarningsPage() {
   if (loading) return <LoadingScreen />;
 
   return (
-    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex h-[100dvh] flex-col bg-background">
+    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex min-h-full flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 p-4 backdrop-blur-md">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -96,7 +96,7 @@ export default function PartnerEarningsPage() {
         </div>
       </header>
 
-      <main className="mx-auto flex-1 overflow-y-auto p-4 pb-32 sm:max-w-5xl sm:p-6">
+      <main className="mx-auto w-full max-w-5xl p-4 pb-32 sm:p-6">
         {connectionLost ? <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">Realtime earnings sync was interrupted. Latest data has been refreshed directly.</div> : null}
 
         <div className="rounded-[2rem] bg-primary p-6 text-primary-foreground shadow-lg">

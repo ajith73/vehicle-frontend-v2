@@ -459,6 +459,9 @@ export interface CustomerRequest {
   arrivedAt?: string;
   serviceStartedAt?: string;
   completedAt?: string;
+  completionPin?: string;
+  completionPinGeneratedAt?: string;
+  completionPinVerifiedAt?: string;
   pricingMode?: 'FIXED_PRICE' | 'QUOTE_REQUIRED' | string;
   quoteStatus?: 'QUOTE_PENDING' | 'QUOTE_SUBMITTED' | 'QUOTE_APPROVED' | 'QUOTE_REJECTED' | string;
   paymentStatus?: 'PAYMENT_NOT_READY' | 'PAYMENT_PENDING' | 'PAYMENT_COMPLETED' | 'PAYMENT_FAILED' | string;

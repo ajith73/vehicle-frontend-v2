@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { MapPin, Plus, Star, MoreVertical, Loader2, X, Trash2 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useDataContext } from '../../contexts/DataContext';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 export default function CustomerSavedLocationsPage() {
   const { customerProfile, isLoadingCustomerProfile, refreshCustomerProfile } = useDataContext();
   const [showForm, setShowForm] = useState(false);
+  const [locationIdToDelete, setLocationIdToDelete] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -40,14 +42,13 @@ export default function CustomerSavedLocationsPage() {
       
       toast.success('Location saved!');
       setShowForm(false);
-      await refreshCustomerProfile();
+      await refreshCustomerProfile({ force: true });
     } catch (err) {
       toast.error('Failed to save location');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Remove this location?')) return;
     try {
       const currentLocations = profile?.savedLocations || [];
       const updatedLocations = currentLocations.filter((l: any) => l.id !== id);
@@ -58,9 +59,11 @@ export default function CustomerSavedLocationsPage() {
       });
       
       toast.success('Location removed');
-      await refreshCustomerProfile();
+      await refreshCustomerProfile({ force: true });
     } catch (err) {
       toast.error('Failed to remove location');
+    } finally {
+      setLocationIdToDelete(null);
     }
   };
 
@@ -88,10 +91,6 @@ export default function CustomerSavedLocationsPage() {
       default: return 'bg-primary/10';
     }
   };
-
-  useEffect(() => {
-    void refreshCustomerProfile();
-  }, [refreshCustomerProfile]);
 
   return (
     <div className="flex flex-col h-[100dvh] bg-background">
@@ -169,7 +168,7 @@ export default function CustomerSavedLocationsPage() {
                     <button onClick={() => openForm(loc)} className="p-2 text-muted-foreground hover:text-primary transition-colors bg-secondary rounded-full">
                        <MoreVertical className="w-4 h-4" />
                     </button>
-                    <button onClick={() => handleDelete(loc.id)} className="p-2 text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-colors bg-secondary rounded-full">
+                    <button onClick={() => setLocationIdToDelete(loc.id)} className="p-2 text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-colors bg-secondary rounded-full">
                        <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -190,6 +189,21 @@ export default function CustomerSavedLocationsPage() {
           </AnimatePresence>
         )}
       </main>
+
+      <ConfirmDialog
+        isOpen={!!locationIdToDelete}
+        title="Delete saved location?"
+        message="This location will be removed from your quick address list."
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        onCancel={() => setLocationIdToDelete(null)}
+        onConfirm={() => {
+          if (locationIdToDelete) {
+            void handleDelete(locationIdToDelete);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -187,6 +187,7 @@ export default function CustomerActiveServicePage() {
       ? [Number(mechanicRecord.latitude), Number(mechanicRecord.longitude)] as [number, number]
       : null;
   const hasPaymentCta = requestStatus === 'PAYMENT_PENDING' || requestStatus === 'SERVICE_COMPLETED';
+  const showCompletionPin = requestStatus === 'SERVICE_STARTED' && /^\d{4}$/.test(String(request.completionPin || ''));
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
@@ -222,7 +223,7 @@ export default function CustomerActiveServicePage() {
           <div className="space-y-6">
             <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
               <div className="relative h-64 bg-secondary/50 sm:h-80">
-                <MapContainer center={mapCenter} zoom={14} scrollWheelZoom className="h-full w-full">
+                <MapContainer center={mapCenter} zoom={14} scrollWheelZoom className="h-full w-full" key={theme}>
                   <TileLayer attribution={getRequestFlowTileAttribution(theme)} url={getRequestFlowTileUrl(theme)} />
                   <Marker position={mapCenter} icon={customerPinIcon}>
                     <Popup>
@@ -308,6 +309,23 @@ export default function CustomerActiveServicePage() {
               <p className="mt-2 text-sm text-muted-foreground">{request.currentEtaMinutes != null ? `ETA ${request.currentEtaMinutes} min` : 'ETA will appear after live assignment'}</p>
               <p className="mt-2 text-sm text-muted-foreground">{request.Mechanic?.availabilityState || request.dispatchStatus || 'Dispatch in progress'}</p>
             </div>
+
+            {showCompletionPin ? (
+              <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6 shadow-sm">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">Completion OTP</p>
+                <h3 className="mt-3 text-xl font-black text-foreground">Show this 4-digit OTP to your partner after service is finished</h3>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  {String(request.completionPin).split('').map((digit, index) => (
+                    <div key={`${digit}-${index}`} className="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/30 bg-background text-2xl font-black text-foreground shadow-sm">
+                      {digit}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Share this OTP only after the work is fully completed and you have checked your vehicle.
+                </p>
+              </div>
+            ) : null}
 
             {request.quoteStatus === 'QUOTE_SUBMITTED' && (
               <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 shadow-sm">

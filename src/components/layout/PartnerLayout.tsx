@@ -117,7 +117,7 @@ export default function PartnerLayout() {
         toast.success('You are now online');
         window.dispatchEvent(new CustomEvent(PARTNER_LIVE_STATE_EVENT, { detail: { isOnline: true } }));
       }
-      await loadPartnerShell();
+      void loadPartnerShell();
     } catch (error: any) {
       toast.error(error.message || 'Failed to change online status');
     } finally {

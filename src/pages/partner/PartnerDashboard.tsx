@@ -143,8 +143,7 @@ export default function PartnerDashboard() {
         toast.success("You are now Offline");
         window.dispatchEvent(new CustomEvent(PARTNER_LIVE_STATE_EVENT, { detail: { isOnline: false } }));
       }
-      await fetchStaticData();
-      await fetchJobsData();
+      await Promise.all([fetchStaticData(), fetchJobsData()]);
     } catch (err) {
       toast.error("Failed to change online status");
       setIsOnline(!isOnline); // revert
@@ -239,17 +238,20 @@ export default function PartnerDashboard() {
       ) : null}
 
       {/* Earnings Summary */}
-      <motion.div initial={{ y: 20 }} animate={{ y: 0 }} className="bg-primary text-primary-foreground rounded-[2rem] p-6 shadow-[0_10px_30px_rgba(var(--primary),0.3)] mb-6 relative overflow-hidden">
+      <motion.div initial={{ y: 20 }} animate={{ y: 0 }} className="relative mb-6 min-h-[176px] overflow-hidden rounded-[2rem] bg-primary p-6 text-primary-foreground shadow-[0_10px_30px_rgba(var(--primary),0.3)]">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
         <h2 className="text-sm font-bold uppercase tracking-wider text-primary-foreground/80 mb-1">Today's Earnings</h2>
-        <div className="flex items-end gap-3 relative z-10">
-          <span className="text-4xl font-black">₹{earnings.today.toLocaleString()}</span>
+        <div className="relative z-10 flex flex-wrap items-end gap-3">
+          <span className="break-all text-4xl font-black sm:text-5xl">₹{earnings.today.toLocaleString()}</span>
           {earnings.growth > 0 ? (
-            <span className="text-sm font-bold text-emerald-300 mb-1 flex items-center gap-1">
+            <span className="mb-1 flex items-center gap-1 text-sm font-bold text-emerald-300">
               <TrendingUp className="w-4 h-4" /> {earnings.growth}% of weekly net
             </span>
           ) : null}
         </div>
+        <p className="relative z-10 mt-4 max-w-xs text-sm text-primary-foreground/80">
+          Net earnings recorded today from completed and settled roadside jobs.
+        </p>
       </motion.div>
 
       <div className="grid grid-cols-2 gap-3 mb-6">
@@ -282,7 +284,7 @@ export default function PartnerDashboard() {
       {loading ? (
         <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
       ) : currentJob ? (
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-card border-2 border-amber-500/50 shadow-[0_8px_30px_rgba(245,158,11,0.15)] rounded-2xl p-5 mb-8 relative overflow-hidden">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="relative mb-8 min-h-[260px] overflow-hidden rounded-2xl border-2 border-amber-500/50 bg-card p-5 shadow-[0_8px_30px_rgba(245,158,11,0.15)]">
           <div className="absolute top-0 right-0 bg-amber-500 text-amber-950 text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider">
             {currentJob.status.replace('_', ' ')}
           </div>
@@ -290,16 +292,18 @@ export default function PartnerDashboard() {
             <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
                <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-500" />
             </div>
-            <div>
-              <h4 className="font-bold text-lg text-foreground">{currentJob.issueSummary || 'Service Request'}</h4>
-              <p className="text-sm font-semibold text-muted-foreground">{currentJob.CustomerUser?.CustomerProfile?.displayName || 'Customer'} • {currentJob.vehicleLabel}</p>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-lg font-bold text-foreground">{currentJob.issueSummary || 'Service Request'}</h4>
+              <p className="text-sm font-semibold text-muted-foreground">
+                {currentJob.CustomerUser?.CustomerProfile?.displayName || 'Customer'} • {currentJob.vehicleLabel}
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-y-2 mb-5 bg-background/50 p-3 rounded-xl border border-border">
-             <div>
+          <div className="mb-5 grid gap-3 rounded-xl border border-border bg-background/50 p-3 sm:grid-cols-2">
+             <div className="min-w-0">
                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Location</p>
-               <p className="text-sm font-bold text-foreground truncate pr-2">{currentJob.addressText || 'Unknown'}</p>
+               <p className="pr-2 text-sm font-bold text-foreground line-clamp-2">{currentJob.addressText || 'Unknown'}</p>
              </div>
              <div>
                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">ETA</p>

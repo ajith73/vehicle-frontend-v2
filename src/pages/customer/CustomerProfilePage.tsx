@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Bell,
@@ -12,6 +12,9 @@ import {
   Mail,
   MapPin,
   Navigation,
+  Eye,
+  EyeOff,
+  Pencil,
   Phone,
   Settings,
   ShieldCheck,
@@ -27,10 +30,15 @@ import { formatPhoneDisplay, getPrimaryPhoneNumber } from '../../utils/phone';
 
 export default function CustomerProfilePage() {
   const { customerProfile, isLoadingCustomerProfile, refreshCustomerProfile } = useDataContext();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({ displayName: '', phone: '', currentPassword: '', newPassword: '', profilePicture: '' });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [selectedImageName, setSelectedImageName] = useState('');
   const profile = customerProfile;
 
   const name = profile?.name || 'Customer';
@@ -47,16 +55,59 @@ export default function CustomerProfilePage() {
       newPassword: '',
       profilePicture: profile?.profilePicture || ''
     });
+    setErrors({});
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setSelectedImageName('');
     setIsEditing(true);
+  };
+
+  const getInputClasses = (field: string) =>
+    `mt-1 w-full rounded-xl border bg-background p-3 font-medium outline-none transition-colors focus:border-primary ${
+      errors[field] ? 'border-destructive focus:border-destructive' : 'border-border'
+    }`;
+
+  const validateProfileForm = () => {
+    const nextErrors: Record<string, string> = {};
+    const normalizedName = editForm.displayName.trim();
+    const phoneDigits = editForm.phone.replace(/\D/g, '');
+    const hasPasswordChange = Boolean(editForm.currentPassword || editForm.newPassword);
+    const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{6,}$/;
+
+    if (!normalizedName) {
+      nextErrors.displayName = 'Full name is required';
+    }
+
+    if (editForm.phone.trim() && phoneDigits.length !== 10) {
+      nextErrors.phone = 'Phone number must be exactly 10 digits';
+    }
+
+    if (hasPasswordChange && !editForm.currentPassword) {
+      nextErrors.currentPassword = 'Current password is required to change password';
+    }
+
+    if (editForm.newPassword && !strongPassword.test(editForm.newPassword)) {
+      nextErrors.newPassword = 'Use 6+ chars with uppercase, lowercase, number, and special character';
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be less than 2MB');
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      event.target.value = '';
       return;
     }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be less than 2MB');
+      event.target.value = '';
+      return;
+    }
+    setSelectedImageName(file.name);
     const reader = new FileReader();
     reader.onloadend = () => {
       setEditForm((prev) => ({ ...prev, profilePicture: reader.result as string }));
@@ -66,13 +117,15 @@ export default function CustomerProfilePage() {
 
   const handleSaveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!validateProfileForm()) return;
     setSaving(true);
     try {
+      const phoneDigits = editForm.phone.replace(/\D/g, '');
       await apiClient('/customer/profile', {
         method: 'PUT',
         data: {
-          displayName: editForm.displayName,
-          phone: editForm.phone,
+          displayName: editForm.displayName.trim(),
+          phone: phoneDigits || null,
           profilePicture: editForm.profilePicture
         }
       });
@@ -156,20 +209,30 @@ export default function CustomerProfilePage() {
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background">
+    <div className="min-h-full bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 p-4 shadow-sm backdrop-blur-md">
         <h1 className="text-xl font-black text-foreground">Profile</h1>
       </header>
 
-      <main className="mx-auto flex-1 overflow-y-auto p-4 pb-32 sm:max-w-4xl sm:p-6">
+      <main className="mx-auto w-full max-w-4xl p-4 pb-32 sm:p-6">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] border border-border bg-card p-6 shadow-sm">
           <div className="flex flex-wrap items-start gap-4">
-            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-primary/20 bg-primary text-2xl font-black text-primary-foreground shadow-inner">
-              {profile?.profilePicture ? (
-                <img src={profile.profilePicture} alt="Profile" className="h-full w-full object-cover" />
-              ) : (
-                initials
-              )}
+            <div className="relative">
+              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-primary/20 bg-primary text-2xl font-black text-primary-foreground shadow-inner">
+                {profile?.profilePicture ? (
+                  <img src={profile.profilePicture} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  initials
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={openEditModal}
+                className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-primary shadow-sm transition-colors hover:bg-secondary"
+                aria-label="Edit profile photo"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -305,29 +368,67 @@ export default function CustomerProfilePage() {
               <div className="overflow-y-auto p-5">
                 <form id="edit-profile-form" onSubmit={handleSaveProfile} className="space-y-4">
                   <div className="mb-6 flex justify-center">
-                    <div className="group relative">
-                      <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-background bg-secondary">
-                        {editForm.profilePicture ? (
-                          <img src={editForm.profilePicture} alt="Profile preview" className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="text-3xl font-black text-muted-foreground">{initials}</span>
-                        )}
-                      </div>
-                      <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                        <span className="text-xs font-bold">Change</span>
-                        <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                      </label>
+                      <div className="group relative flex flex-col items-center">
+                        <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-background bg-secondary">
+                          {editForm.profilePicture ? (
+                            <img src={editForm.profilePicture} alt="Profile preview" className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-3xl font-black text-muted-foreground">{initials}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-primary shadow-sm transition-colors hover:bg-secondary"
+                          aria-label="Upload profile picture"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="mt-4 rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-secondary"
+                        >
+                          {editForm.profilePicture ? 'Change photo' : 'Upload photo'}
+                        </button>
+                        <p className="mt-2 text-center text-xs text-muted-foreground">
+                          {selectedImageName || (editForm.profilePicture ? 'Profile image selected' : 'PNG, JPG, WEBP up to 2MB')}
+                        </p>
                     </div>
                   </div>
 
                   <div>
                     <label className="ml-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Full Name</label>
-                    <input type="text" value={editForm.displayName} onChange={(event) => setEditForm((prev) => ({ ...prev, displayName: event.target.value }))} className="mt-1 w-full rounded-xl border border-border bg-background p-3 font-medium outline-none transition-colors focus:border-primary" placeholder="Your name" required />
+                    <input type="text" value={editForm.displayName} onChange={(event) => { setEditForm((prev) => ({ ...prev, displayName: event.target.value })); setErrors((current) => ({ ...current, displayName: '' })); }} className={getInputClasses('displayName')} placeholder="Your name" required />
+                    {errors.displayName ? <p className="mt-1 text-xs font-semibold text-destructive">{errors.displayName}</p> : null}
                   </div>
 
                   <div>
                     <label className="ml-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone Number</label>
-                    <input type="tel" value={editForm.phone} onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))} className="mt-1 w-full rounded-xl border border-border bg-background p-3 font-medium outline-none transition-colors focus:border-primary" placeholder="Your phone number" />
+                    <div className={`mt-1 flex overflow-hidden rounded-xl border bg-background ${errors.phone ? 'border-destructive' : 'border-border'} focus-within:border-primary`}>
+                      <span className="flex items-center border-r border-border px-3 text-sm font-bold text-muted-foreground">+91</span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={editForm.phone}
+                        onChange={(event) => {
+                          const digitsOnly = event.target.value.replace(/\D/g, '').slice(0, 10);
+                          setEditForm((prev) => ({ ...prev, phone: digitsOnly }));
+                          setErrors((current) => ({ ...current, phone: '' }));
+                        }}
+                        className="w-full bg-transparent p-3 font-medium outline-none"
+                        placeholder="9876543210"
+                      />
+                    </div>
+                    {errors.phone ? <p className="mt-1 text-xs font-semibold text-destructive">{errors.phone}</p> : null}
                   </div>
 
                   <div className="mt-4 border-t border-border pt-4">
@@ -335,11 +436,26 @@ export default function CustomerProfilePage() {
                     <div className="space-y-4">
                       <div>
                         <label className="ml-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Current Password</label>
-                        <input type="password" value={editForm.currentPassword} onChange={(event) => setEditForm((prev) => ({ ...prev, currentPassword: event.target.value }))} className="mt-1 w-full rounded-xl border border-border bg-background p-3 font-medium outline-none transition-colors focus:border-primary" placeholder="Leave blank if unchanged" />
+                        <div className={`mt-1 flex items-center rounded-xl border bg-background ${errors.currentPassword ? 'border-destructive' : 'border-border'} focus-within:border-primary`}>
+                          <input type={showCurrentPassword ? 'text' : 'password'} value={editForm.currentPassword} onChange={(event) => { setEditForm((prev) => ({ ...prev, currentPassword: event.target.value })); setErrors((current) => ({ ...current, currentPassword: '' })); }} className="w-full bg-transparent p-3 font-medium outline-none" placeholder="Leave blank if unchanged" />
+                          <button type="button" onClick={() => setShowCurrentPassword((current) => !current)} className="px-3 text-muted-foreground">
+                            {showCurrentPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                          </button>
+                        </div>
+                        {errors.currentPassword ? <p className="mt-1 text-xs font-semibold text-destructive">{errors.currentPassword}</p> : null}
                       </div>
                       <div>
                         <label className="ml-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">New Password</label>
-                        <input type="password" value={editForm.newPassword} onChange={(event) => setEditForm((prev) => ({ ...prev, newPassword: event.target.value }))} className="mt-1 w-full rounded-xl border border-border bg-background p-3 font-medium outline-none transition-colors focus:border-primary" placeholder="Enter a new password" />
+                        <div className={`mt-1 flex items-center rounded-xl border bg-background ${errors.newPassword ? 'border-destructive' : 'border-border'} focus-within:border-primary`}>
+                          <input type={showNewPassword ? 'text' : 'password'} value={editForm.newPassword} onChange={(event) => { setEditForm((prev) => ({ ...prev, newPassword: event.target.value })); setErrors((current) => ({ ...current, newPassword: '' })); }} className="w-full bg-transparent p-3 font-medium outline-none" placeholder="Enter a new password" />
+                          <button type="button" onClick={() => setShowNewPassword((current) => !current)} className="px-3 text-muted-foreground">
+                            {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                          </button>
+                        </div>
+                        <p className={`mt-1 text-xs font-medium ${errors.newPassword ? 'text-destructive' : 'text-muted-foreground'}`}>
+                          Strong password: minimum 6 characters with uppercase, lowercase, number, and special character.
+                        </p>
+                        {errors.newPassword ? <p className="mt-1 text-xs font-semibold text-destructive">{errors.newPassword}</p> : null}
                       </div>
                     </div>
                   </div>

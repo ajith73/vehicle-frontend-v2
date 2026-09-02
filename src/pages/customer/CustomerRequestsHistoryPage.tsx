@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Wrench, CheckCircle2, XCircle, ChevronRight, Clock, Loader2, Calendar } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,6 +8,7 @@ import { getRequestStatusMeta, isActiveRequestStatus, isCancelledRequestStatus, 
 type Tab = 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
 export default function CustomerRequestsHistoryPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('ACTIVE');
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +36,33 @@ export default function CustomerRequestsHistoryPage() {
   };
 
   const filteredRequests = getFilteredRequests();
+
+  const handleOpenInvoice = (event: React.MouseEvent, requestId: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    navigate(`/customer/request/${requestId}/payment`);
+  };
+
+  const handleRebook = (event: React.MouseEvent, request: any) => {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      localStorage.setItem('roadresq.customer.rebook-request', JSON.stringify({
+        id: request.id,
+        issueSummary: request.issueSummary || '',
+        issueDetails: request.issueDetails || '',
+        vehicleLabel: request.vehicleLabel || '',
+        addressText: request.addressText || '',
+        latitude: request.latitude ?? null,
+        longitude: request.longitude ?? null,
+        mechanicId: request.Mechanic?.id ?? null,
+        serviceTypeName: request.ServiceType?.name || request.issueSummary || ''
+      }));
+    } catch {
+      // Ignore storage issues and still continue to the request flow.
+    }
+    navigate(`/customer/request?rebook=${request.id}`);
+  };
 
   return (
     <div className="flex flex-col h-[100dvh] bg-background">
@@ -87,9 +115,17 @@ export default function CustomerRequestsHistoryPage() {
               className="flex flex-col gap-4"
             >
               {filteredRequests.map(req => (
-                <Link 
+                <div
                   key={req.id} 
-                  to={`/customer/request/${req.id}`} 
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/customer/request/${req.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      navigate(`/customer/request/${req.id}`);
+                    }
+                  }}
                   className={`block bg-card/80 backdrop-blur-sm border rounded-2xl p-4 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 ${activeTab === 'CANCELLED' ? 'opacity-75 border-border' : 'border-border/50 hover:border-primary/50'}`}
                 >
                   <div className="flex justify-between items-start mb-3">
@@ -121,12 +157,12 @@ export default function CustomerRequestsHistoryPage() {
                     <div className="flex justify-between items-center border-t border-border/50 pt-4 mt-2">
                       <span className="font-black text-foreground text-lg">₹{req.finalAmount || req.quotationAmount || '0'}</span>
                       <div className="flex gap-2">
-                        <button className="text-xs font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors" onClick={(e) => { e.preventDefault(); /* View invoice logic */ }}>Invoice</button>
-                        <button className="text-xs font-bold text-secondary-foreground bg-secondary px-3 py-1.5 rounded-full hover:bg-secondary/80 transition-colors" onClick={(e) => { e.preventDefault(); /* Rebook logic */ }}>Rebook</button>
+                        <button className="text-xs font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors" onClick={(e) => handleOpenInvoice(e, req.id)}>Invoice</button>
+                        <button className="text-xs font-bold text-secondary-foreground bg-secondary px-3 py-1.5 rounded-full hover:bg-secondary/80 transition-colors" onClick={(e) => handleRebook(e, req)}>Rebook</button>
                       </div>
                     </div>
                   )}
-                </Link>
+                </div>
               ))}
             </motion.div>
           </AnimatePresence>

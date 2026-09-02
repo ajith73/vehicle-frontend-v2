@@ -52,6 +52,32 @@ export default function PartnerActiveJobPage() {
   const [connectionLost, setConnectionLost] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
+  const jobState = String(job?.status || '');
+  const lastUpdatedLabel = useMemo(
+    () => (lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleTimeString('en-IN') : null),
+    [lastUpdatedAt]
+  );
+  const nextActionCopy = useMemo(() => {
+    if (!jobState) {
+      return {
+        title: 'Waiting for live job data',
+        description: 'This screen will refresh automatically as soon as the latest request state is available.'
+      };
+    }
+    if (jobState === 'ACCEPTED') {
+      return { title: 'Start navigation', description: 'Head toward the customer and switch the job to en route once you begin moving.' };
+    }
+    if (jobState === 'EN_ROUTE') {
+      return { title: 'Mark arrival', description: 'Once you reach the customer, mark the job as arrived so the customer sees the live update.' };
+    }
+    if (jobState === 'ARRIVED') {
+      return { title: 'Inspect and start service', description: 'If pricing needs approval, create a quote first. Otherwise start the service when ready.' };
+    }
+    if (jobState === 'SERVICE_STARTED') {
+      return { title: 'Complete the service', description: 'Finish the job after the work is done and move to the completion and OTP step.' };
+    }
+    return { title: getRequestStatusMeta(jobState).headline, description: 'This screen stays synced with the latest customer request and route state.' };
+  }, [jobState]);
 
   useEffect(() => {
     if (!id) return;
@@ -202,29 +228,8 @@ export default function PartnerActiveJobPage() {
     );
   }
 
-  const jobState = job.status;
-  const lastUpdatedLabel = useMemo(
-    () => (lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleTimeString('en-IN') : null),
-    [lastUpdatedAt]
-  );
-  const nextActionCopy = useMemo(() => {
-    if (jobState === 'ACCEPTED') {
-      return { title: 'Start navigation', description: 'Head toward the customer and switch the job to en route once you begin moving.' };
-    }
-    if (jobState === 'EN_ROUTE') {
-      return { title: 'Mark arrival', description: 'Once you reach the customer, mark the job as arrived so the customer sees the live update.' };
-    }
-    if (jobState === 'ARRIVED') {
-      return { title: 'Inspect and start service', description: 'If pricing needs approval, create a quote first. Otherwise start the service when ready.' };
-    }
-    if (jobState === 'SERVICE_STARTED') {
-      return { title: 'Complete the service', description: 'Finish the job after the work is done and move to the completion and OTP step.' };
-    }
-    return { title: getRequestStatusMeta(jobState).headline, description: 'This screen stays synced with the latest customer request and route state.' };
-  }, [jobState]);
-
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col h-[100dvh] bg-background">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex min-h-full flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-md border-b border-border p-4 flex justify-between items-center">
         <div className="flex items-center gap-3">

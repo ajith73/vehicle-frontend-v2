@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Building, Settings, FileText, Image as ImageIcon, Edit, LogOut, ExternalLink, MapPin, Navigation, Check, Clock, Info } from 'lucide-react';
+import { ArrowLeft, Building, Settings, FileText, Image as ImageIcon, Edit, LogOut, ExternalLink, MapPin, Navigation, Check, Clock, Info } from 'lucide-react';
 import { apiClient } from '../api/apiClient';
 import type { Mechanic } from '../types';
 import toast from 'react-hot-toast';
@@ -83,8 +83,14 @@ export default function MechanicDashboard() {
     <div className="min-h-screen bg-muted/30">
       <div className="max-w-5xl mx-auto px-4 py-8">
         
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-8 gap-4">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
+            <button
+              onClick={() => navigate('/partner/account')}
+              className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-secondary"
+            >
+              <ArrowLeft size={16} /> Back to account
+            </button>
             <h1 className="text-3xl font-black text-foreground">Mechanic Dashboard</h1>
             <p className="text-muted-foreground mt-1">Review your business information and manage verification.</p>
             {(accountEmail || (displayData.emails && displayData.emails[0])) && (

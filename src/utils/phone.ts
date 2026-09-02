@@ -32,4 +32,22 @@ export const getPrimaryPhoneNumber = (value: unknown): string | null => {
 };
 
 export const formatPhoneDisplay = (value: unknown, fallback = 'N/A') =>
-  getPrimaryPhoneNumber(value) || fallback;
+{
+  const phone = getPrimaryPhoneNumber(value);
+  if (!phone) return fallback;
+
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `+91 ${digits}`;
+  }
+
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return `+${digits}`;
+  }
+
+  if (phone.startsWith('+')) {
+    return phone;
+  }
+
+  return phone;
+};

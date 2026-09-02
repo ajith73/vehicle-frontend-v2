@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, ChevronRight, ExternalLink, FileBadge2, Landmark, LifeBuoy, Loader2, LogOut, Moon, RefreshCw, Settings2, ShieldCheck, Sun, User, Wrench } from 'lucide-react';
+import { Bell, ChevronRight, ExternalLink, Eye, EyeOff, FileBadge2, Landmark, LifeBuoy, Loader2, LogOut, Moon, RefreshCw, Settings2, ShieldCheck, Sun, User, Wrench } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { apiClient } from '../../api/apiClient';
@@ -16,6 +16,8 @@ export default function PartnerAccountPage() {
     currentPassword: '',
     newPassword: ''
   });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const mechanicId = typeof window !== 'undefined' ? localStorage.getItem('mechanicId') : null;
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -50,6 +52,15 @@ export default function PartnerAccountPage() {
     [displayName]
   );
 
+  const validatePartnerPassword = (value: string) => {
+    if (value.length < 6) return 'New password must be at least 6 characters';
+    if (!/[A-Z]/.test(value)) return 'New password must include 1 uppercase letter';
+    if (!/[a-z]/.test(value)) return 'New password must include 1 lowercase letter';
+    if (!/[0-9]/.test(value)) return 'New password must include 1 number';
+    if (!/[^A-Za-z0-9]/.test(value)) return 'New password must include 1 special character';
+    return null;
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
@@ -64,8 +75,9 @@ export default function PartnerAccountPage() {
       toast.error('Enter current and new password');
       return;
     }
-    if (passwordForm.newPassword.length < 6) {
-      toast.error('New password must be at least 6 characters');
+    const passwordError = validatePartnerPassword(passwordForm.newPassword);
+    if (passwordError) {
+      toast.error(passwordError);
       return;
     }
 
@@ -96,7 +108,7 @@ export default function PartnerAccountPage() {
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background">
+    <div className="min-h-full bg-background">
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-background/90 p-4 backdrop-blur-md">
         <h1 className="text-xl font-black text-foreground">Account</h1>
         <button onClick={() => void load()} className="rounded-full border border-border bg-card p-2 text-foreground">
@@ -104,7 +116,7 @@ export default function PartnerAccountPage() {
         </button>
       </header>
 
-      <main className="mx-auto flex-1 overflow-y-auto p-4 pb-32 sm:max-w-4xl sm:p-6">
+      <main className="mx-auto w-full max-w-4xl p-4 pb-32 sm:p-6">
         {isSetupMode ? (
           <div className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-4 shadow-sm">
             <p className="text-sm font-bold text-foreground">
@@ -227,7 +239,7 @@ export default function PartnerAccountPage() {
             </div>
 
             <div className="rounded-2xl border border-border bg-card shadow-sm">
-              <button type="button" onClick={toggleTheme} className="flex w-full items-center justify-between border-b border-border p-4 transition-colors hover:bg-secondary/50">
+              <button type="button" onClick={toggleTheme} className="flex w-full items-center justify-between border-b border-border p-4 text-left transition-colors hover:bg-secondary/50">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
                     {theme === 'light' ? <Moon className="h-4 w-4 text-foreground" /> : <Sun className="h-4 w-4 text-foreground" />}
@@ -237,7 +249,12 @@ export default function PartnerAccountPage() {
                     <span className="text-[11px] text-muted-foreground">{theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}</span>
                   </div>
                 </div>
-                <span className="text-xs font-bold text-primary">{theme === 'light' ? 'Light' : 'Dark'}</span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="text-xs font-bold text-primary">{theme === 'light' ? 'Light' : 'Dark'}</span>
+                  <span className={`flex h-6 w-11 items-center rounded-full border px-1 transition-colors ${theme === 'light' ? 'border-border bg-secondary' : 'border-primary/30 bg-primary/20'}`}>
+                    <span className={`h-4 w-4 rounded-full bg-primary transition-transform ${theme === 'light' ? 'translate-x-0' : 'translate-x-5'}`} />
+                  </span>
+                </span>
               </button>
               <Link to="/partner/notifications" className="flex items-center justify-between border-b border-border p-4 transition-colors hover:bg-secondary/50">
                 <div className="flex items-center gap-3">
@@ -263,14 +280,27 @@ export default function PartnerAccountPage() {
 
         <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h3 className="text-lg font-black text-foreground">Security</h3>
+          <div className="mt-2 rounded-xl border border-border bg-background/70 p-3 text-xs text-muted-foreground">
+            Password must include at least 6 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character.
+          </div>
           <form onSubmit={handlePasswordUpdate} className="mt-4 space-y-4">
             <div>
               <label className="mb-1 block text-xs font-bold text-foreground">Current password</label>
-              <input type="password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm outline-none" placeholder="Enter current password" />
+              <div className="relative">
+                <input type={showCurrentPassword ? 'text' : 'password'} value={passwordForm.currentPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 pr-12 text-sm outline-none" placeholder="Enter current password" />
+                <button type="button" onClick={() => setShowCurrentPassword((current) => !current)} className="absolute inset-y-0 right-3 inline-flex items-center text-muted-foreground" aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}>
+                  {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-foreground">New password</label>
-              <input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm outline-none" placeholder="Enter new password" />
+              <div className="relative">
+                <input type={showNewPassword ? 'text' : 'password'} value={passwordForm.newPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 pr-12 text-sm outline-none" placeholder="Enter new password" />
+                <button type="button" onClick={() => setShowNewPassword((current) => !current)} className="absolute inset-y-0 right-3 inline-flex items-center text-muted-foreground" aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}>
+                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
             <button type="submit" disabled={savingPassword} className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:opacity-70">
               {savingPassword ? 'Updating password...' : 'Update password'}

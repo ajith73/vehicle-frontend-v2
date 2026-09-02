@@ -66,11 +66,7 @@ export function MapClickHandler({ onSelect }: { onSelect: (coords: [number, numb
 }
 
 export const getRequestFlowTileUrl = (theme: 'light' | 'dark') =>
-  theme === 'dark'
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export const getRequestFlowTileAttribution = (theme: 'light' | 'dark') =>
-  theme === 'dark'
-    ? '&copy; OpenStreetMap contributors &copy; CARTO'
-    : '&copy; OpenStreetMap contributors';
+  '&copy; OpenStreetMap contributors';

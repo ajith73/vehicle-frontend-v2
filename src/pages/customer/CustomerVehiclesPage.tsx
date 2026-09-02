@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Car, Plus, Settings2, Trash2, Loader2, X } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,7 +34,7 @@ export default function CustomerVehiclesPage() {
       
       toast.success('Vehicle saved!');
       setShowForm(false);
-      await refreshCustomerProfile();
+      await refreshCustomerProfile({ force: true });
     } catch (err) {
       toast.error('Failed to save vehicle');
     }
@@ -52,7 +52,7 @@ export default function CustomerVehiclesPage() {
       });
       
       toast.success('Vehicle removed');
-      await refreshCustomerProfile();
+      await refreshCustomerProfile({ force: true });
     } catch (err) {
       toast.error('Failed to remove vehicle');
     }
@@ -72,7 +72,7 @@ export default function CustomerVehiclesPage() {
           data: { savedVehicles: currentVehicles }
         });
         toast.success('Default vehicle updated');
-        await refreshCustomerProfile();
+        await refreshCustomerProfile({ force: true });
       }
     } catch (err) {
       toast.error('Failed to update default vehicle');
@@ -87,10 +87,6 @@ export default function CustomerVehiclesPage() {
     }
     setShowForm(true);
   };
-
-  useEffect(() => {
-    void refreshCustomerProfile();
-  }, [refreshCustomerProfile]);
 
   return (
     <div className="flex flex-col h-[100dvh] bg-background">

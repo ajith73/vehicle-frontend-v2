@@ -113,6 +113,7 @@ export default function CustomerSupportPage() {
 
     setSaving(true);
     try {
+      const evidenceNotes = form.evidenceNotes.trim();
       await apiClient('/customer/support/tickets', {
         method: 'POST',
         data: {
@@ -123,7 +124,7 @@ export default function CustomerSupportPage() {
           priority: form.priority,
           incidentType: form.incidentType,
           contactPreference: form.contactPreference,
-          evidenceNotes: form.evidenceNotes.trim()
+          ...(evidenceNotes ? { evidenceNotes } : {})
         }
       });
       trackEvent('Customer', 'SUPPORT_TICKET_CREATED', form.category);

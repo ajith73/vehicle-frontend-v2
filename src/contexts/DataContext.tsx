@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { apiClient, AUTH_STATE_CHANGED_EVENT } from '../api/apiClient';
 
 interface DataContextType {
@@ -18,7 +18,7 @@ interface DataContextType {
   cachedLandingMechanicsParams: string | null;
   setCachedLandingMechanicsData: (data: any[], params: string) => void;
   customerProfile: any | null;
-  refreshCustomerProfile: () => Promise<void>;
+  refreshCustomerProfile: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -39,6 +39,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const [customerProfile, setCustomerProfile] = useState<any | null>(null);
   const [isLoadingCustomerProfile, setIsLoadingCustomerProfile] = useState(true);
+  const lastCustomerProfileFetchRef = useRef(0);
+  const customerProfileRequestRef = useRef<Promise<void> | null>(null);
+
+  const CUSTOMER_PROFILE_REFRESH_TTL_MS = 30_000;
 
   const hasCustomerSession = () => {
     const token = localStorage.getItem('token');
@@ -46,28 +50,49 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return Boolean(token) && role === 'Customer';
   };
 
-  const refreshCustomerProfile = useCallback(async () => {
-    setIsLoadingCustomerProfile(true);
+  const refreshCustomerProfile = useCallback(async (options?: { force?: boolean; silent?: boolean }) => {
+    const force = options?.force ?? false;
+    const silent = options?.silent ?? false;
+
     if (!hasCustomerSession()) {
       setCustomerProfile(null);
       setIsLoadingCustomerProfile(false);
       return;
     }
 
-    try {
-      const data = await apiClient<any>('/customer/profile');
-      if (data?.profile) {
-        setCustomerProfile(data.profile);
-      } else {
-        setCustomerProfile(null);
-      }
-    } catch (err) {
-      console.error('Failed to fetch customer profile', err);
-      setCustomerProfile(null);
-    } finally {
-      setIsLoadingCustomerProfile(false);
+    const now = Date.now();
+    if (!force && customerProfile && now - lastCustomerProfileFetchRef.current < CUSTOMER_PROFILE_REFRESH_TTL_MS) {
+      return;
     }
-  }, []);
+
+    if (customerProfileRequestRef.current) {
+      return customerProfileRequestRef.current;
+    }
+
+    if (!silent || !customerProfile) {
+      setIsLoadingCustomerProfile(true);
+    }
+
+    customerProfileRequestRef.current = (async () => {
+      try {
+        const data = await apiClient<any>('/customer/profile');
+        lastCustomerProfileFetchRef.current = Date.now();
+        if (data?.profile) {
+          setCustomerProfile(data.profile);
+        } else {
+          setCustomerProfile(null);
+        }
+      } catch (err) {
+        console.error('Failed to fetch customer profile', err);
+        setCustomerProfile(null);
+      } finally {
+        setIsLoadingCustomerProfile(false);
+        customerProfileRequestRef.current = null;
+      }
+    })();
+
+    return customerProfileRequestRef.current;
+  }, [customerProfile]);
 
   const setCachedMechanicsData = (data: any[], totalCount: number, params: string) => {
     setCachedMechanics(data);
@@ -108,18 +133,19 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const handleAuthStateChanged = () => {
-      void refreshCustomerProfile();
+      lastCustomerProfileFetchRef.current = 0;
+      void refreshCustomerProfile({ force: true });
     };
 
     const handleWindowFocus = () => {
       if (hasCustomerSession()) {
-        void refreshCustomerProfile();
+        void refreshCustomerProfile({ silent: true });
       }
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && hasCustomerSession()) {
-        void refreshCustomerProfile();
+        void refreshCustomerProfile({ silent: true });
       }
     };
 

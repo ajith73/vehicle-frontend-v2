@@ -52,7 +52,7 @@ export default function PartnerPerformancePage() {
 
   if (loadError) {
     return (
-      <div className="mx-auto flex h-[100dvh] max-w-lg items-center px-4">
+      <div className="mx-auto flex min-h-[60vh] max-w-lg items-center px-4">
         <ErrorStateCard title="Performance unavailable" description={loadError} onRetry={() => void load()} icon={Target} className="w-full" />
       </div>
     );
@@ -61,7 +61,7 @@ export default function PartnerPerformancePage() {
   const metrics = data?.metrics;
 
   return (
-    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex h-[100dvh] flex-col bg-background">
+    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="flex min-h-full flex-col bg-background">
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-background/90 p-4 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/partner')} className="rounded-full bg-secondary p-2 transition-colors hover:bg-secondary/80">
@@ -77,7 +77,7 @@ export default function PartnerPerformancePage() {
         </button>
       </header>
 
-      <main className="mx-auto flex-1 overflow-y-auto p-4 pb-32 sm:max-w-4xl sm:p-6">
+      <main className="mx-auto w-full max-w-4xl p-4 pb-32 sm:p-6">
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex items-center justify-between rounded-2xl border-2 border-primary bg-card p-6 shadow-[0_10px_30px_rgba(59,130,246,0.1)]">
           <div>
             <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Partner score</h2>

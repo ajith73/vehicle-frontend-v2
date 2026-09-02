@@ -149,7 +149,7 @@ export default function PartnerCompleteJobPage() {
 
   if (completed) {
     return (
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex h-[100dvh] flex-col items-center justify-center bg-background p-4 text-center">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex min-h-[60vh] flex-col items-center justify-center bg-background p-4 text-center">
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 20 }} className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500/10">
           <CheckCircle2 className="h-12 w-12 text-emerald-500" />
         </motion.div>
@@ -163,7 +163,7 @@ export default function PartnerCompleteJobPage() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="flex h-[100dvh] flex-col bg-background">
+    <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="flex min-h-full flex-col bg-background">
       <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-background/90 p-4 backdrop-blur-md">
         <button onClick={() => navigate(-1)} className="rounded-full p-2 transition-colors hover:bg-secondary">
           <ChevronLeft className="h-6 w-6 text-foreground" />
@@ -174,7 +174,7 @@ export default function PartnerCompleteJobPage() {
         </button>
       </header>
 
-      <main className="mx-auto flex-1 overflow-y-auto p-4 pb-32 sm:max-w-4xl sm:p-6">
+      <main className="mx-auto w-full max-w-4xl p-4 pb-32 sm:p-6">
         <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
           <section className="space-y-6">
             <div className="rounded-[2rem] border border-border bg-card p-6 shadow-sm">

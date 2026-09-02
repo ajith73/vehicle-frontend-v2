@@ -58,6 +58,7 @@ export default function CustomerRequestFlow() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const initialService = searchParams.get('service') || '';
+  const rebookRequestId = searchParams.get('rebook');
   const { theme } = useTheme();
 
   const {
@@ -99,10 +100,6 @@ export default function CustomerRequestFlow() {
   });
 
   useEffect(() => {
-    void refreshCustomerProfile();
-  }, [refreshCustomerProfile]);
-
-  useEffect(() => {
     if (userLocation) {
       setManualCoords(userLocation);
     }
@@ -117,6 +114,64 @@ export default function CustomerRequestFlow() {
       setServicesError('');
     }
   }, [services]);
+
+  useEffect(() => {
+    if (!rebookRequestId) {
+      return;
+    }
+
+    const applyRebook = async () => {
+      try {
+        const stored = localStorage.getItem('roadresq.customer.rebook-request');
+        const cached = stored ? JSON.parse(stored) : null;
+        const request = cached && String(cached.id) === String(rebookRequestId)
+          ? cached
+          : await apiClient<any>(`/customer/requests/${rebookRequestId}/status`);
+
+        const nextProblem = String(
+          request?.ServiceType?.name ||
+          request?.serviceTypeName ||
+          request?.issueSummary ||
+          initialService ||
+          ''
+        );
+
+        const nextVehicleLabel = String(request?.vehicleLabel || '');
+        const matchingVehicle = (customerProfile?.savedVehicles || []).find((vehicle: any) => {
+          const label = `${vehicle.make} ${vehicle.model} (${vehicle.plate})`;
+          return label.toLowerCase() === nextVehicleLabel.toLowerCase();
+        });
+        const nextCoords =
+          Number.isFinite(Number(request?.latitude)) && Number.isFinite(Number(request?.longitude))
+            ? [Number(request.latitude), Number(request.longitude)] as [number, number]
+            : null;
+
+        setRequestData((current) => ({
+          ...current,
+          problem: nextProblem || current.problem,
+          details: String(request?.issueDetails || ''),
+          vehicleId: matchingVehicle?.id || current.vehicleId,
+          vehicleLabel: matchingVehicle ? `${matchingVehicle.make} ${matchingVehicle.model} (${matchingVehicle.plate})` : (nextVehicleLabel || current.vehicleLabel),
+          vehicleType: matchingVehicle?.type || current.vehicleType
+        }));
+
+        if (nextCoords) {
+          setManualCoords(nextCoords);
+          setManualAddress(String(request?.addressText || 'Pinned Location'));
+        }
+
+        if (request?.mechanicId || request?.Mechanic?.id) {
+          setSelectedMechanicId(String(request.mechanicId || request.Mechanic.id));
+        }
+
+        setStep((customerProfile?.savedVehicles || []).length > 0 ? 2 : 1);
+      } catch (error) {
+        console.error('Failed to preload rebook request', error);
+      }
+    };
+
+    void applyRebook();
+  }, [rebookRequestId, customerProfile?.savedVehicles, initialService]);
 
   useEffect(() => {
     if (isLoadingData || services.length > 0) return;
@@ -289,7 +344,7 @@ export default function CustomerRequestFlow() {
       });
 
       toast.success('Vehicle added successfully');
-      await refreshCustomerProfile();
+      await refreshCustomerProfile({ force: true });
       setRequestData((prev) => ({
         ...prev,
         vehicleId: newVehicle.id || '',
@@ -620,140 +675,10 @@ export default function CustomerRequestFlow() {
               exit={{ opacity: 0, y: -18 }}
               className="w-full"
             >
-              <div className="mx-auto grid h-[calc(100dvh-8.5rem)] w-full max-w-6xl gap-0 overflow-hidden rounded-[1.75rem] border border-border bg-card shadow-sm lg:grid-cols-[380px_minmax(0,1fr)]">
-                <div className="order-2 flex min-h-0 flex-col lg:order-1 lg:border-r lg:border-border">
-                  <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-5">
-                    <div>
-                      <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Choose Location</h2>
-                      <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                        Search, use live GPS, or move the pin on the map. We will use this location for dispatch and routing.
-                      </p>
-                    </div>
-                    <div className="mt-5 grid gap-3">
-                      <button
-                        onClick={() => setShowLocationPopup(true)}
-                        className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-secondary px-4 py-3 text-sm font-bold text-secondary-foreground transition-colors hover:bg-secondary/80"
-                      >
-                        <Search className="h-4 w-4" />
-                        Search Address
-                      </button>
-                      <button
-                        onClick={handleUseLiveLocation}
-                        disabled={locationLoading}
-                        className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary/10 px-4 py-3 text-sm font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-60"
-                      >
-                        {locationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
-                        {locationLoading ? 'Detecting live location...' : 'Use Live Location'}
-                      </button>
-                      <button
-                        onClick={() => setShowMapPicker(true)}
-                        className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-bold text-foreground transition-colors hover:bg-secondary"
-                      >
-                        <MapPin className="h-4 w-4 text-primary" />
-                        Open Full Map Picker
-                      </button>
-                    </div>
-
-                    <div className={`mt-5 rounded-2xl border p-4 ${stepErrors.location ? 'border-red-500/30 bg-red-500/10' : 'border-border bg-background'}`}>
-                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Pinned Address</p>
-                      <p className="mt-2 break-words text-sm font-black text-foreground">
-                        {locationLoading ? 'Detecting your location...' : addressResolving ? 'Updating pinned address...' : (manualAddress || 'Location not set')}
-                      </p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Tap the map once to move the pin. You can also choose from saved locations below.
-                      </p>
-                      {stepErrors.location ? (
-                        <p className="mt-3 text-xs font-semibold text-red-500">{stepErrors.location}</p>
-                      ) : null}
-                    </div>
-
-                    {!!customerProfile?.savedLocations?.length && (
-                      <div className="mt-5">
-                        <div className="mb-3 flex items-center justify-between gap-2">
-                          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Saved Locations</p>
-                          <span className="text-xs text-muted-foreground">Tap one to reuse</span>
-                        </div>
-                        <div className="space-y-3">
-                          {customerProfile.savedLocations.slice(0, 5).map((savedLocation: any) => (
-                            <button
-                              key={savedLocation.id}
-                              onClick={() => applySavedLocation(savedLocation)}
-                              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-secondary/30"
-                            >
-                              <p className="text-sm font-bold text-foreground">{savedLocation.name || savedLocation.type || 'Saved location'}</p>
-                              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{savedLocation.addressText}</p>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-5 rounded-2xl border border-border bg-background p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Nearby partners</p>
-                        <span className="text-xs font-bold text-primary">
-                          {mechanicsLoading ? 'Finding nearby...' : `${nearbyMechanics.length} found`}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Nearby partners are filtered using the selected service and vehicle type. You can continue with the selected partner or let the platform assign one.
-                      </p>
-                      {mechanicsLoading ? (
-                        <div className="flex items-center justify-center py-6">
-                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                        </div>
-                      ) : nearbyMechanics.length > 0 ? (
-                        <div className="mt-4 space-y-3">
-                          {nearbyMechanics.map((mechanic: any) => {
-                            const selected = String(mechanic.id) === selectedMechanicId;
-                            return (
-                              <button
-                                key={mechanic.id}
-                                onClick={() => setSelectedMechanicId(String(mechanic.id))}
-                                className={`w-full rounded-2xl border p-4 text-left transition-all ${
-                                  selected
-                                    ? 'border-primary bg-primary/10 shadow-[0_10px_20px_rgba(var(--primary),0.12)]'
-                                    : 'border-border bg-card hover:border-primary/40'
-                                }`}
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-black text-foreground">{mechanic.businessName || mechanic.name || 'Partner'}</p>
-                                    <p className="mt-1 truncate text-xs text-muted-foreground">
-                                      {[mechanic.area, mechanic.city, mechanic.mechanicType].filter(Boolean).join(' • ') || 'Nearby partner'}
-                                    </p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-xs font-bold text-primary">
-                                      {typeof mechanic.distanceKm === 'number' ? `${mechanic.distanceKm.toFixed(1)} km` : 'Nearby'}
-                                    </p>
-                                    <p className="mt-1 text-[11px] text-muted-foreground">{mechanic.availabilityState || 'Available'}</p>
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="mt-4 rounded-2xl border border-dashed border-border bg-card px-4 py-4 text-sm text-muted-foreground">
-                          Nearby partners will appear here after you confirm the pinned location.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-border px-4 py-4 sm:px-5">
-                    <button
-                      onClick={nextStep}
-                      className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90"
-                    >
-                      Continue
-                    </button>
-                  </div>
-                </div>
-
-                <div className="order-1 min-h-[38vh] overflow-hidden lg:order-2 lg:min-h-0">
+              <div className="relative mx-auto h-[calc(100dvh-7.5rem)] w-full max-w-6xl overflow-hidden rounded-[1.75rem] border border-border bg-card shadow-sm">
+                <div className="absolute inset-0 z-0">
                   <MapContainer
+                    key={theme}
                     center={manualCoords || userLocation || [11.0168, 76.9558]}
                     zoom={14}
                     className="h-full w-full"
@@ -788,6 +713,172 @@ export default function CustomerRequestFlow() {
                     />
                     <RequestLocationPreviewMap coords={manualCoords || userLocation || [11.0168, 76.9558]} />
                   </MapContainer>
+                </div>
+
+                <div className="absolute inset-x-3 top-3 z-[450] sm:inset-x-5 sm:top-5 lg:left-auto lg:right-5 lg:w-[22rem]">
+                  <div className="rounded-2xl border border-border bg-background/95 p-3 shadow-lg backdrop-blur-md">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <MapPin className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Pinned Address</p>
+                        <p className="mt-1 break-words text-sm font-black text-foreground">
+                          {locationLoading ? 'Detecting your location...' : addressResolving ? 'Updating pinned address...' : (manualAddress || 'Location not set')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="absolute inset-x-0 bottom-0 z-[460] h-[50%] lg:inset-y-0 lg:left-0 lg:right-auto lg:h-auto lg:w-[380px] lg:border-r lg:border-border">
+                  <div className="flex h-full flex-col rounded-t-[1.75rem] border-t border-border bg-background/96 shadow-[0_-12px_32px_rgba(15,23,42,0.16)] backdrop-blur-md lg:rounded-none lg:border-t-0 lg:shadow-none">
+                    <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-border lg:hidden" />
+                    <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-5 lg:hidden">
+                      <div>
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Choose Location</h2>
+                        <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                          Search, use live GPS, or move the pin on the map.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/customer')}
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                        aria-label="Close location drawer"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                    <div className="hidden px-5 py-5 lg:block">
+                      <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Choose Location</h2>
+                      <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                        Search, use live GPS, or move the pin on the map. We will use this location for dispatch and routing.
+                      </p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto px-4 pb-4 sm:px-5">
+                      <div className="grid gap-3">
+                        <button
+                          onClick={() => setShowLocationPopup(true)}
+                          className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-secondary px-4 py-3 text-sm font-bold text-secondary-foreground transition-colors hover:bg-secondary/80"
+                        >
+                          <Search className="h-4 w-4" />
+                          Search Address
+                        </button>
+                        <button
+                          onClick={handleUseLiveLocation}
+                          disabled={locationLoading}
+                          className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary/10 px-4 py-3 text-sm font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-60"
+                        >
+                          {locationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+                          {locationLoading ? 'Detecting live location...' : 'Use Live Location'}
+                        </button>
+                        <button
+                          onClick={() => setShowMapPicker(true)}
+                          className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-bold text-foreground transition-colors hover:bg-secondary"
+                        >
+                          <MapPin className="h-4 w-4 text-primary" />
+                          Open Full Map Picker
+                        </button>
+                      </div>
+
+                      <div className={`mt-5 rounded-2xl border p-4 ${stepErrors.location ? 'border-red-500/30 bg-red-500/10' : 'border-border bg-background'}`}>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Pinned Address</p>
+                        <p className="mt-2 break-words text-sm font-black text-foreground">
+                          {locationLoading ? 'Detecting your location...' : addressResolving ? 'Updating pinned address...' : (manualAddress || 'Location not set')}
+                        </p>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Tap the map once to move the pin. You can also choose from saved locations below.
+                        </p>
+                        {stepErrors.location ? (
+                          <p className="mt-3 text-xs font-semibold text-red-500">{stepErrors.location}</p>
+                        ) : null}
+                      </div>
+
+                      {!!customerProfile?.savedLocations?.length && (
+                        <div className="mt-5">
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Saved Locations</p>
+                            <span className="text-xs text-muted-foreground">Tap one to reuse</span>
+                          </div>
+                          <div className="space-y-3">
+                            {customerProfile.savedLocations.slice(0, 5).map((savedLocation: any) => (
+                              <button
+                                key={savedLocation.id}
+                                onClick={() => applySavedLocation(savedLocation)}
+                                className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-secondary/30"
+                              >
+                                <p className="text-sm font-bold text-foreground">{savedLocation.name || savedLocation.type || 'Saved location'}</p>
+                                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{savedLocation.addressText}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-5 rounded-2xl border border-border bg-background p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Nearby partners</p>
+                          <span className="text-xs font-bold text-primary">
+                            {mechanicsLoading ? 'Finding nearby...' : `${nearbyMechanics.length} found`}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Nearby partners are filtered using the selected service and vehicle type. You can continue with the selected partner or let the platform assign one.
+                        </p>
+                        {mechanicsLoading ? (
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                          </div>
+                        ) : nearbyMechanics.length > 0 ? (
+                          <div className="mt-4 space-y-3">
+                            {nearbyMechanics.map((mechanic: any) => {
+                              const selected = String(mechanic.id) === selectedMechanicId;
+                              return (
+                                <button
+                                  key={mechanic.id}
+                                  onClick={() => setSelectedMechanicId(String(mechanic.id))}
+                                  className={`w-full rounded-2xl border p-4 text-left transition-all ${
+                                    selected
+                                      ? 'border-primary bg-primary/10 shadow-[0_10px_20px_rgba(var(--primary),0.12)]'
+                                      : 'border-border bg-card hover:border-primary/40'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-black text-foreground">{mechanic.businessName || mechanic.name || 'Partner'}</p>
+                                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                                        {[mechanic.area, mechanic.city, mechanic.mechanicType].filter(Boolean).join(' • ') || 'Nearby partner'}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-xs font-bold text-primary">
+                                        {typeof mechanic.distanceKm === 'number' ? `${mechanic.distanceKm.toFixed(1)} km` : 'Nearby'}
+                                      </p>
+                                      <p className="mt-1 text-[11px] text-muted-foreground">{mechanic.availabilityState || 'Available'}</p>
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-2xl border border-dashed border-border bg-card px-4 py-4 text-sm text-muted-foreground">
+                            Nearby partners will appear here after you confirm the pinned location.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-border px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
+                      <button
+                        onClick={nextStep}
+                        className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90"
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.section>
